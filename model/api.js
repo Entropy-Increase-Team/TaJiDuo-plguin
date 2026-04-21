@@ -25,6 +25,14 @@ function createRequestError (message, extra = {}) {
   return error
 }
 
+function isAuthErrorStatus (status) {
+  return Number(status) === 401
+}
+
+function isAuthErrorCode (code) {
+  return Number(code) === 401
+}
+
 function getErrorMessage (error) {
   if (error?.response?.data?.message) return String(error.response.data.message)
   if (error?.response?.statusText) return String(error.response.statusText)
@@ -57,6 +65,12 @@ function normalizePositiveDelay (value, fallback) {
   return Math.round(num)
 }
 
+function normalizeNonNegativeDelay (value, fallback) {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num < 0) return fallback
+  return Math.round(num)
+}
+
 function buildFrameworkHeaders (fwt = '') {
   const token = String(fwt || '').trim()
   if (!token) return {}
@@ -64,6 +78,33 @@ function buildFrameworkHeaders (fwt = '') {
   return {
     'X-Framework-Token': token
   }
+}
+
+function buildPlatformHeaders (platformId = '', platformUserId = '') {
+  const nextPlatformId = String(platformId || '').trim()
+  const nextPlatformUserId = String(platformUserId || '').trim()
+  const headers = {}
+
+  if (nextPlatformId) {
+    headers['X-Platform-Id'] = nextPlatformId
+  }
+
+  if (nextPlatformUserId) {
+    headers['X-Platform-User-Id'] = nextPlatformUserId
+  }
+
+  return headers
+}
+
+function buildFrameworkQuery (fwt = '', extra = {}) {
+  const token = String(fwt || '').trim()
+  const payload = isPlainObject(extra) ? { ...extra } : {}
+
+  if (token) {
+    payload.fwt = token
+  }
+
+  return omitEmptyValues(payload)
 }
 
 export { createRequestError }
@@ -91,15 +132,15 @@ export default class TaJiDuoApi {
   }
 
   estimateSingleCommunityTimeoutMs (payload = {}) {
-    const actionDelayMs = normalizePositiveDelay(payload?.actionDelayMs, 3000)
-    const stepDelayMs = normalizePositiveDelay(payload?.stepDelayMs, 8000)
+    const actionDelayMs = normalizeNonNegativeDelay(payload?.actionDelayMs, 3000)
+    const stepDelayMs = normalizeNonNegativeDelay(payload?.stepDelayMs, 8000)
 
     // 预留接口本身耗时 + 多次动作等待 + 步骤间等待
     return 60000 + (actionDelayMs * 10) + (stepDelayMs * 5)
   }
 
   estimateAllCommunitiesTimeoutMs (payload = {}) {
-    const betweenCommunitiesMs = normalizePositiveDelay(payload?.betweenCommunitiesMs, 15000)
+    const betweenCommunitiesMs = normalizeNonNegativeDelay(payload?.betweenCommunitiesMs, 15000)
     return (this.estimateSingleCommunityTimeoutMs(payload) * 2) + betweenCommunitiesMs + 30000
   }
 
@@ -142,6 +183,8 @@ export default class TaJiDuoApi {
       const message = isPlainObject(body) ? body.message : `请求失败：HTTP ${response.status}`
       throw createRequestError(message || `请求失败：HTTP ${response.status}`, {
         responseStatus: response.status,
+        responseCode: isPlainObject(body) ? Number(body.code) : undefined,
+        isAuthError: isAuthErrorStatus(response.status) || isAuthErrorCode(body?.code),
         responseBody: body
       })
     }
@@ -154,6 +197,8 @@ export default class TaJiDuoApi {
       if (Number(body.code) !== 0) {
         throw createRequestError(body.message || `请求失败：业务码 ${body.code}`, {
           responseStatus: response.status,
+          responseCode: Number(body.code),
+          isAuthError: isAuthErrorStatus(response.status) || isAuthErrorCode(body.code),
           responseBody: body
         })
       }
@@ -171,10 +216,14 @@ export default class TaJiDuoApi {
     })
   }
 
-  createSession (payload = {}) {
+  createSession (payload = {}, options = {}) {
+    const platformId = String(options?.platformId || '').trim()
+    const platformUserId = String(options?.platformUserId || '').trim()
+
     return this.request('/api/v1/login/tajiduo/session', {
       method: 'post',
-      data: payload
+      data: payload,
+      headers: buildPlatformHeaders(platformId, platformUserId)
     })
   }
 
@@ -211,14 +260,65 @@ export default class TaJiDuoApi {
     })
   }
 
-  hottaCommunitySignAll (payload = {}) {
-    return this.request('/api/v1/games/hotta/community/sign/all', {
+  communitySignTask (taskId = '', payload = {}) {
+    const taskKey = String(taskId || '').trim()
+    const fwt = String(payload?.fwt || '').trim()
+
+    if (!taskKey) {
+      throw createRequestError('缺少 taskId，无法查询跨社区任务状态')
+    }
+
+    return this.request(`/api/v1/games/community/sign/tasks/${encodeURIComponent(taskKey)}`, {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaCommunitySignAll (payload = {}) {
+    return this.request('/api/v1/games/huanta/community/sign/all', {
       method: 'post',
       data: payload,
       timeoutMs: Math.max(
         this.getCommunityTaskTimeoutMs(),
         this.estimateSingleCommunityTimeoutMs(payload)
       )
+    })
+  }
+
+  huantaCommunitySignTask (taskId = '', payload = {}) {
+    const taskKey = String(taskId || '').trim()
+    const fwt = String(payload?.fwt || '').trim()
+
+    if (!taskKey) {
+      throw createRequestError('缺少 taskId，无法查询幻塔社区任务状态')
+    }
+
+    return this.request(`/api/v1/games/huanta/community/sign/tasks/${encodeURIComponent(taskKey)}`, {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaCommunityExpLevel (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/community/exp/level', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaCommunityTasks (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+    const gid = normalizePositiveDelay(payload?.gid, 2)
+
+    return this.request('/api/v1/games/huanta/community/tasks', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt, { gid }),
+      headers: buildFrameworkHeaders(fwt)
     })
   }
 
@@ -230,6 +330,42 @@ export default class TaJiDuoApi {
         this.getCommunityTaskTimeoutMs(),
         this.estimateSingleCommunityTimeoutMs(payload)
       )
+    })
+  }
+
+  yihuanCommunitySignTask (taskId = '', payload = {}) {
+    const taskKey = String(taskId || '').trim()
+    const fwt = String(payload?.fwt || '').trim()
+
+    if (!taskKey) {
+      throw createRequestError('缺少 taskId，无法查询异环社区任务状态')
+    }
+
+    return this.request(`/api/v1/games/yihuan/community/sign/tasks/${encodeURIComponent(taskKey)}`, {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanCommunityExpLevel (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/yihuan/community/exp/level', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanCommunityTasks (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+    const gid = normalizePositiveDelay(payload?.gid, 2)
+
+    return this.request('/api/v1/games/yihuan/community/tasks', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt, { gid }),
+      headers: buildFrameworkHeaders(fwt)
     })
   }
 }

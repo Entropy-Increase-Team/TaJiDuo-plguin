@@ -1,8 +1,24 @@
 tajiduo:
+  # TaJiDuo 后端地址；只填域名也可以，插件会自动补成 https://
   base_url: 'https://tajiduo.shallow.ink'
+
+  # 客户端 ID；会作为 X-Platform-Id 发送，建议使用 bot QQ、应用名或其它 ASCII 标识
+  client_id: ''
+
+  # 普通接口请求超时，单位毫秒
   request_timeout_ms: 15000
+
+  # 登录后等待下一条 6 位验证码的时长，单位毫秒
   captcha_wait_timeout_ms: 300000
+
+  # 社区任务整体等待超时，单位毫秒
   community_task_timeout_ms: 300000
+
+  # 单个动作之间的等待时间，单位毫秒；支持设为 0 关闭等待
   action_delay_ms: 3000
+
+  # 每个任务步骤之间的等待时间，单位毫秒；支持设为 0 关闭等待
   step_delay_ms: 8000
+
+  # 一键社区签到时两个社区之间的等待时间，单位毫秒；支持设为 0 关闭等待
   between_communities_ms: 15000

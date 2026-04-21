@@ -27,6 +27,12 @@ function normalizePositiveInt (value) {
   return Math.round(num)
 }
 
+function normalizeNonNegativeInt (value) {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num < 0) return undefined
+  return Math.round(num)
+}
+
 function joinLines (lines = []) {
   return lines
     .filter((line) => line !== undefined && line !== null && String(line) !== '')
@@ -47,6 +53,7 @@ export {
   formatJsonPreview,
   joinLines,
   maskValue,
+  normalizeNonNegativeInt,
   normalizePositiveInt,
   pickFirstNonEmpty,
   shortenText

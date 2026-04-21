@@ -14,6 +14,9 @@ Yunzai-Bot 的塔吉多社区插件。
 - 幻塔社区签到
 - 异环社区签到
 - 幻塔 + 异环一键社区签到
+- 幻塔社区查询
+- 异环社区查询
+- 幻塔 + 异环一键社区查询
 - 每天 `00:20` 自动社区签到
 
 ## 安装方式
@@ -47,6 +50,7 @@ git clone git@github.com:Entropy-Increase-Team/TaJiDuo-plguin.git ./plugins/TaJi
 ```yaml
 tajiduo:
   base_url: 'https://tajiduo.shallow.ink'
+  client_id: ''
   request_timeout_ms: 15000
   captcha_wait_timeout_ms: 300000
   community_task_timeout_ms: 300000
@@ -58,6 +62,7 @@ tajiduo:
 字段说明：
 
 - `base_url`: 塔吉多后端地址
+- `client_id`: 客户端 ID，会作为 `X-Platform-Id` 发送，建议使用 ASCII 标识
 - `request_timeout_ms`: 普通请求超时
 - `captcha_wait_timeout_ms`: 登录等待验证码超时
 - `community_task_timeout_ms`: 社区任务总超时
@@ -68,6 +73,11 @@ tajiduo:
 说明：
 
 - `base_url` 即使只写 `tajiduo.shallow.ink`，插件也会自动补上 `https://`
+- 登录建会话时会通过请求头注入 `X-Platform-Id` 与 `X-Platform-User-Id`
+- `X-Platform-Id` 使用 `client_id`
+- `X-Platform-User-Id` 使用发送命令的用户 ID
+- `client_id` 需要是可安全放入 HTTP 头的 ASCII 标识
+- `action_delay_ms`、`step_delay_ms`、`between_communities_ms` 支持设置为 `0`，表示关闭对应等待
 
 ## 命令说明
 
@@ -93,14 +103,22 @@ tajiduo:
 
 | 命令 | 说明 |
 | --- | --- |
-| `#塔吉多异环社区签到` | 执行异环社区签到 |
-| `#塔吉多幻塔社区签到` | 执行幻塔社区签到 |
-| `#塔吉多社区签到` | 依次执行幻塔 + 异环社区签到 |
+| `#塔吉多异环社区签到` | 提交异环社区签到任务并等待结果 |
+| `#塔吉多幻塔社区签到` | 提交幻塔社区签到任务并等待结果 |
+| `#塔吉多社区签到` | 提交幻塔 + 异环社区签到任务并等待结果 |
+| `#塔吉多异环社区查询` | 查询异环社区等级与任务进度 |
+| `#塔吉多幻塔社区查询` | 查询幻塔社区等级与任务进度 |
+| `#塔吉多社区查询` | 查询幻塔 + 异环社区等级与任务进度 |
+
+说明：
+
+- 社区查询会使用合并转发消息展示等级信息与任务明细
 
 ## 自动社区签到
 
 插件会在每天 `00:20` 自动遍历 Redis 中已保存的账号，并执行一键社区签到：
 
 - `POST /api/v1/games/community/sign/all`
+- `GET /api/v1/games/community/sign/tasks/:taskId`
 
 如果当前没有已保存账号，自动任务会直接跳过，并在日志中输出提示。
