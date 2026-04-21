@@ -2,8 +2,15 @@ import plugin from '../../../lib/plugins/plugin.js'
 import common from '../../../lib/common/common.js'
 import TaJiDuoApi from '../model/api.js'
 import { clearUserSession, getUserSession, listUserSessions } from '../model/store.js'
+import {
+  AUTH_EXPIRED_MESSAGE,
+  LOGIN_COMMAND_EXAMPLE,
+  buildReloginReply,
+  getErrorMessage,
+  isAuthExpiredError
+} from '../utils/auth.js'
 import Config from '../utils/config.js'
-import { buildCommandReg, formatCommand } from '../utils/command.js'
+import { buildCommandReg } from '../utils/command.js'
 import { joinLines, normalizeNonNegativeInt, pickFirstNonEmpty } from '../utils/common.js'
 
 const PLATFORM_ALIAS = '(?:TaJiDuo|tajiduo|TAJIDUO|塔吉多)'
@@ -16,7 +23,6 @@ const HUANTA_COMMUNITY_QUERY_REG = buildCommandReg(`${PLATFORM_ALIAS}幻塔社�
 const YIHUAN_COMMUNITY_QUERY_REG = buildCommandReg(`${PLATFORM_ALIAS}异环社区查询`)
 const DEFAULT_TASK_GID = 2
 const COMMUNITY_TASK_POLL_INTERVAL_MS = 2000
-const AUTH_EXPIRED_MESSAGE = '当前 fwt 已失效，请重新登录'
 const ACTIVE_COMMUNITY_TASK_KEYS = new Set([
   'signin_exp',
   'browse_post_exp',
@@ -53,6 +59,7 @@ const ALL_COMMUNITY_META = Object.freeze({
   queryTitle: '塔吉多社区查询',
   queryForwardTitle: '塔吉多社区查询结果'
 })
+const COMMUNITY_GAME_KEYS = Object.freeze(Object.keys(COMMUNITY_GAME_CONFIG))
 
 function isPlainObject (value) {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -111,26 +118,6 @@ function extractTaskErrorMessage (payload = {}) {
       payload?.result?.batch?.message
     ) || '任务执行失败'
   ).trim()
-}
-
-function isAuthExpiredError (error) {
-  const message = String(error?.message || '').trim()
-  return error?.isAuthError === true ||
-    Number(error?.responseStatus) === 401 ||
-    Number(error?.responseCode) === 401 ||
-    message.includes(AUTH_EXPIRED_MESSAGE)
-}
-
-function buildReloginReply (title = '', message = AUTH_EXPIRED_MESSAGE) {
-  return joinLines([
-    title,
-    `结果：${message}`,
-    `请重新发送 ${formatCommand('塔吉多登录 13800138000')}`
-  ])
-}
-
-function getErrorMessage (error) {
-  return String(error?.message || error || '').trim()
 }
 
 function pickLevelValue (payload = {}, ...keys) {
@@ -278,23 +265,28 @@ function findCommunityItemByGameCode (data = {}, gameCode = '') {
   return items.find((item) => String(item?.gameCode || '').trim() === code) || null
 }
 
-function buildNestedCommunityLines (data = {}) {
-  const sections = [
-    ['幻塔社区', findCommunityItemByGameCode(data, 'huanta')],
-    ['异环社区', findCommunityItemByGameCode(data, 'yihuan')]
-  ]
+function buildResultLine (data = {}, fallback = '已返回结果') {
+  const summary = summarizeResultObject(data)
+  return `结果：${summary || fallback}`
+}
 
+function getNestedCommunitySections (data = {}) {
+  return COMMUNITY_GAME_KEYS
+    .map((gameKey) => {
+      const config = getCommunityGameConfig(gameKey)
+      return {
+        title: `${config?.name || gameKey}社区`,
+        section: findCommunityItemByGameCode(data, gameKey)
+      }
+    })
+    .filter(({ section }) => isPlainObject(section))
+}
+
+function buildNestedCommunityLines (data = {}) {
   const lines = []
 
-  for (const [title, section] of sections) {
-    if (!isPlainObject(section)) continue
-
-    const summary = summarizeResultObject(section)
-    if (summary) {
-      lines.push(`${title}：${summary}`)
-    } else {
-      lines.push(`${title}：已返回结果`)
-    }
+  for (const { title, section } of getNestedCommunitySections(data)) {
+    lines.push(`${title}：${summarizeResultObject(section) || '已返回结果'}`)
 
     const before = buildTaskSnapshotLines(`${title}执行前任务`, section?.tasksBefore)
     if (before.length > 0) {
@@ -316,10 +308,16 @@ function buildNestedCommunityLines (data = {}) {
   return lines
 }
 
+function buildNestedCommunityMessages (data = {}) {
+  return getNestedCommunitySections(data)
+    .map(({ title, section }) => buildCommunityReply(`${title}执行完成`, section))
+    .filter(Boolean)
+}
+
 function buildCommunityReply (title = '', data = {}) {
   const lines = [
     title,
-    summarizeResultObject(data) ? `结果：${summarizeResultObject(data)}` : ''
+    summarizeResultObject(data) ? buildResultLine(data, '') : ''
   ]
 
   const before = buildTaskSnapshotLines('执行前任务', data?.tasksBefore)
@@ -338,6 +336,16 @@ function buildCommunityReply (title = '', data = {}) {
   }
 
   return joinLines(lines)
+}
+
+function buildAllCommunitySignMessages (data = {}) {
+  const summary = joinLines([
+    `${ALL_COMMUNITY_META.signTitle}执行完成`,
+    buildResultLine(data)
+  ])
+
+  const detailMessages = buildNestedCommunityMessages(data)
+  return [summary, ...detailMessages].filter(Boolean)
 }
 
 function buildCommunityLevelLines (data = {}) {
@@ -454,8 +462,8 @@ function buildCommunityTaskDetailLines (title = '', data = {}) {
 function buildCommunityQueryMessages (communityName = '', levelData, tasksData, errors = {}) {
   const queryTitle = `塔吉多${communityName}社区查询`
   const taskTitle = `塔吉多${communityName}社区任务`
-  const summaryLines = [queryTitle]
   const levelLines = levelData ? buildCommunityLevelLines(levelData) : []
+  const summaryLines = [queryTitle]
 
   if (levelLines.length > 0) {
     summaryLines.push(...levelLines)
@@ -487,6 +495,14 @@ function buildCommunityQueryMessages (communityName = '', levelData, tasksData, 
   }
 
   return messages
+}
+
+function buildAllCommunityQueryMessages (resultMap = {}) {
+  return COMMUNITY_GAME_KEYS.flatMap((gameKey) => {
+    const config = getCommunityGameConfig(gameKey)
+    const result = resultMap[gameKey] || {}
+    return buildCommunityQueryMessages(config?.name || gameKey, result.levelData, result.tasksData, result.errors)
+  })
 }
 
 function extractSingleCommunityTaskResult (payload = {}) {
@@ -559,29 +575,38 @@ export class TaJiDuoCommunitySign extends plugin {
     ]
   }
 
+  getSessionIdentity () {
+    return {
+      selfId: this.e.self_id || 'bot',
+      userId: this.e.user_id
+    }
+  }
+
   async getStoredFwt () {
-    const session = await getUserSession(this.e.self_id || 'bot', this.e.user_id)
+    const { selfId, userId } = this.getSessionIdentity()
+    const session = await getUserSession(selfId, userId)
     const fwt = String(session?.fwt || '').trim()
 
     if (!fwt) {
-      throw new Error('请先发送 #塔吉多登录 <手机号> 完成登录')
+      throw new Error(`请先发送 ${LOGIN_COMMAND_EXAMPLE} 完成登录`)
     }
 
     return fwt
   }
 
   async clearCurrentUserSession () {
-    await clearUserSession(this.e.self_id || 'bot', this.e.user_id)
+    const { selfId, userId } = this.getSessionIdentity()
+    await clearUserSession(selfId, userId)
   }
 
   async replyFailure (title = '', error) {
     if (isAuthExpiredError(error)) {
       await this.clearCurrentUserSession()
-      await this.reply(buildReloginReply(title, error.message || AUTH_EXPIRED_MESSAGE))
+      await this.reply(buildReloginReply(title, getErrorMessage(error) || AUTH_EXPIRED_MESSAGE))
       return true
     }
 
-    await this.reply(`${title}：${error.message || error}`)
+    await this.reply(`${title}：${getErrorMessage(error)}`)
     return true
   }
 
@@ -606,7 +631,7 @@ export class TaJiDuoCommunitySign extends plugin {
     try {
       const fwt = await this.getStoredFwt()
       await this.reply(`${config.signTitle}开始执行，请稍候...`)
-      const { data } = await this.runSingleCommunitySign(gameKey, fwt)
+      const data = await this.runSingleCommunitySign(gameKey, fwt)
       await this.reply(buildCommunityReply(`${config.signTitle}执行完成`, data))
       return true
     } catch (error) {
@@ -618,8 +643,8 @@ export class TaJiDuoCommunitySign extends plugin {
     try {
       const fwt = await this.getStoredFwt()
       await this.reply(`${ALL_COMMUNITY_META.signTitle}开始执行，请稍候...`)
-      const { data } = await this.runAllCommunitySign(fwt)
-      await this.reply(buildCommunityReply(`${ALL_COMMUNITY_META.signTitle}执行完成`, data))
+      const data = await this.runAllCommunitySign(fwt)
+      await this.replyQueryForward(`${ALL_COMMUNITY_META.signTitle}结果`, buildAllCommunitySignMessages(data))
       return true
     } catch (error) {
       return this.replyFailure(`${ALL_COMMUNITY_META.signTitle}失败`, error)
@@ -660,42 +685,22 @@ export class TaJiDuoCommunitySign extends plugin {
     const submitData = await submitTask(payload)
     const taskId = getTaskId(submitData)
 
-    if (!taskId) {
-      return {
-        taskId: '',
-        submitData,
-        statusData: submitData,
-        finalData: extractResult(submitData) || submitData
-      }
-    }
-
-    if (isTaskFinished(submitData)) {
-      return {
-        taskId,
-        submitData,
-        statusData: submitData,
-        finalData: extractResult(submitData) || submitData
-      }
+    if (!taskId || isTaskFinished(submitData)) {
+      return extractResult(submitData) || submitData
     }
 
     const startedAt = Date.now()
-    let latestData = submitData
 
     while (Date.now() - startedAt <= timeoutMs) {
       await sleep(COMMUNITY_TASK_POLL_INTERVAL_MS)
-      latestData = await fetchTask(taskId, { fwt: payload?.fwt })
+      const statusData = await fetchTask(taskId, { fwt: payload?.fwt })
 
-      if (isTaskFailed(latestData)) {
-        throw new Error(extractTaskErrorMessage(latestData))
+      if (isTaskFailed(statusData)) {
+        throw new Error(extractTaskErrorMessage(statusData))
       }
 
-      if (isTaskFinished(latestData)) {
-        return {
-          taskId,
-          submitData,
-          statusData: latestData,
-          finalData: extractResult(latestData) || latestData
-        }
+      if (isTaskFinished(statusData)) {
+        return extractResult(statusData) || statusData
       }
     }
 
@@ -705,36 +710,24 @@ export class TaJiDuoCommunitySign extends plugin {
   async runSingleCommunitySign (gameKey = '', fwt = '') {
     const { submitTask, fetchTask } = this.getSingleCommunityApiMethods(gameKey)
     const payload = buildSingleCommunityPayload(fwt)
-    const result = await this.waitForTaskCompletion({
+    return this.waitForTaskCompletion({
       submitTask,
       fetchTask,
       payload,
       timeoutMs: this.getTaskWaitTimeoutMs('single', payload),
       extractResult: extractSingleCommunityTaskResult
     })
-
-    return {
-      payload,
-      data: result.finalData,
-      taskId: result.taskId
-    }
   }
 
   async runAllCommunitySign (fwt = '') {
     const payload = buildAllCommunityPayload(fwt)
-    const result = await this.waitForTaskCompletion({
+    return this.waitForTaskCompletion({
       submitTask: this.api.communitySignAll.bind(this.api),
       fetchTask: this.api.communitySignTask.bind(this.api),
       payload,
       timeoutMs: this.getTaskWaitTimeoutMs('all', payload),
       extractResult: extractBatchCommunityTaskResult
     })
-
-    return {
-      payload,
-      data: result.finalData,
-      taskId: result.taskId
-    }
   }
 
   async fetchCommunityQueryData (options = {}) {
@@ -778,13 +771,16 @@ export class TaJiDuoCommunitySign extends plugin {
     return this.fetchCommunityQueryData({ fetchLevel, fetchTasks, fwt })
   }
 
-  ensureQueryResultAvailable (result = {}) {
-    if (result.authError) {
-      throw result.authError
-    }
+  async fetchAllCommunityQueryResults (fwt = '') {
+    const results = await Promise.all(
+      COMMUNITY_GAME_KEYS.map((gameKey) => this.fetchSingleCommunityQueryData(gameKey, fwt))
+    )
 
-    if (!result.levelData && !result.tasksData) {
-      throw new Error(result.errors.level || result.errors.tasks || '未获取到社区数据')
+    return {
+      results,
+      resultMap: Object.fromEntries(COMMUNITY_GAME_KEYS.map((gameKey, index) => [gameKey, results[index]])),
+      authError: results.find((result) => result?.authError)?.authError,
+      hasAnyData: results.some((result) => result?.levelData || result?.tasksData)
     }
   }
 
@@ -795,7 +791,12 @@ export class TaJiDuoCommunitySign extends plugin {
       const fwt = await this.getStoredFwt()
       await this.reply(`${config.queryTitle}开始执行，请稍候...`)
       const result = await this.fetchSingleCommunityQueryData(gameKey, fwt)
-      this.ensureQueryResultAvailable(result)
+      if (result.authError) {
+        throw result.authError
+      }
+      if (!result.levelData && !result.tasksData) {
+        throw new Error(result.errors.level || result.errors.tasks || '未获取到社区数据')
+      }
       await this.replyQueryForward(
         config.queryForwardTitle,
         buildCommunityQueryMessages(config.name, result.levelData, result.tasksData, result.errors)
@@ -818,30 +819,23 @@ export class TaJiDuoCommunitySign extends plugin {
     try {
       const fwt = await this.getStoredFwt()
       await this.reply(`${ALL_COMMUNITY_META.queryTitle}开始执行，请稍候...`)
-      const gameKeys = Object.keys(COMMUNITY_GAME_CONFIG)
-      const results = await Promise.all(gameKeys.map((gameKey) => this.fetchSingleCommunityQueryData(gameKey, fwt)))
-      const resultMap = Object.fromEntries(gameKeys.map((gameKey, index) => [gameKey, results[index]]))
-      const authError = results.find((result) => result?.authError)?.authError
+      const queryResults = await this.fetchAllCommunityQueryResults(fwt)
 
-      if (authError) {
-        throw authError
+      if (queryResults.authError) {
+        throw queryResults.authError
       }
 
-      const hasAnyData = results.some((result) => result?.levelData || result?.tasksData)
-      if (!hasAnyData) {
-        throw new Error(results
+      if (!queryResults.hasAnyData) {
+        throw new Error(queryResults.results
           .flatMap((result) => [result?.errors?.level, result?.errors?.tasks])
           .filter(Boolean)
           .join(' | ') || '未获取到社区数据')
       }
 
-      const messages = gameKeys.flatMap((gameKey) => {
-        const config = getCommunityGameConfig(gameKey)
-        const result = resultMap[gameKey] || {}
-        return buildCommunityQueryMessages(config?.name || gameKey, result.levelData, result.tasksData, result.errors)
-      })
-
-      await this.replyQueryForward(ALL_COMMUNITY_META.queryForwardTitle, messages)
+      await this.replyQueryForward(
+        ALL_COMMUNITY_META.queryForwardTitle,
+        buildAllCommunityQueryMessages(queryResults.resultMap)
+      )
       return true
     } catch (error) {
       return this.replyFailure(`${ALL_COMMUNITY_META.queryTitle}失败`, error)
@@ -864,7 +858,7 @@ export class TaJiDuoCommunitySign extends plugin {
       const targetText = describeAutoSignTarget(item)
 
       try {
-        const { data } = await this.runAllCommunitySign(item.session.fwt)
+        const data = await this.runAllCommunitySign(item.session.fwt)
         successCount += 1
         logger.info(`[TaJiDuo-plugin] 自动社区签到成功：${targetText} | ${summarizeResultObject(data) || '执行完成'}`)
       } catch (error) {

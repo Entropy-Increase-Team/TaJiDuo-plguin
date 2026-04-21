@@ -66,7 +66,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 - 必须显式传 `fwt`
 - 支持请求体 `fwt`
 - 支持请求头 `X-Framework-Token`
-- 支持查询参数 `fwt` / `frameworkToken`
+- 支持查询参数 `fwt`
 - 不接受原始 `accessToken / refreshToken / tgdUid / deviceId` 作为业务接口入口
 - 当前 `fwt` 无效、已删除或已失效时返回 `401`
 - 不再自动回落到主账号

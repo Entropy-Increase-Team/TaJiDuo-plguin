@@ -78,7 +78,7 @@
 
 1. 请求体里的 `fwt`
 2. 请求头 `X-Framework-Token`
-3. 查询参数 `fwt` / `frameworkToken`
+3. 查询参数 `fwt`
 
 说明：
 
