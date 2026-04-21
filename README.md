@@ -41,7 +41,7 @@ git clone https://github.com/Entropy-Increase-Team/TaJiDuo-plguin.git ./plugins/
 ```yaml
 tajiduo:
   base_url: 'https://tajiduo.shallow.ink'
-  api_key: 'tjd-8FtI7adTkMHMjZaE'
+  api_key: ''
   client_id: ''
   request_timeout_ms: 15000
   captcha_wait_timeout_ms: 300000
@@ -63,11 +63,14 @@ tajiduo:
 - `step_delay_ms`: 步骤间隔
 - `between_communities_ms`: 一键社区签到时两个社区之间的间隔
 
+测试 API Key：
+
+- `tjd-8FtI7adTkMHMjZaE`
+
 说明：
 
 - `base_url` 即使只写 `tajiduo.shallow.ink`，插件也会自动补上 `https://`
 - `api_key` 会统一作为请求头 `X-API-Key` 发送；当前插件也兼容读取 `apikey / apiKey`
-- README 中示例测试 `api_key`：`tjd-8FtI7adTkMHMjZaE`
 - 登录建会话时会通过请求头注入 `X-Platform-Id` 与 `X-Platform-User-Id`
 - `X-Platform-Id` 使用 `client_id`
 - `X-Platform-User-Id` 使用发送命令的用户 ID
