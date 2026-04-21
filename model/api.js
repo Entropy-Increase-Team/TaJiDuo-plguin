@@ -96,6 +96,24 @@ function buildPlatformHeaders (platformId = '', platformUserId = '') {
   return headers
 }
 
+function buildApiKeyHeaders (apiKey = '') {
+  const token = String(apiKey || '').trim()
+  if (!token) return {}
+
+  return {
+    'X-API-Key': token
+  }
+}
+
+function buildConsoleKeyHeaders (consoleKey = '') {
+  const token = String(consoleKey || '').trim()
+  if (!token) return {}
+
+  return {
+    'X-Console-Key': token
+  }
+}
+
 function buildFrameworkQuery (fwt = '', extra = {}) {
   const token = String(fwt || '').trim()
   const payload = isPlainObject(extra) ? { ...extra } : {}
@@ -152,13 +170,31 @@ export default class TaJiDuoApi {
     return baseUrl
   }
 
+  getApiKey () {
+    const candidates = [
+      Config.get('tajiduo', 'api_key'),
+      Config.get('tajiduo', 'apikey'),
+      Config.get('tajiduo', 'apiKey')
+    ]
+
+    for (const value of candidates) {
+      const token = String(value || '').trim()
+      if (token) {
+        return token
+      }
+    }
+
+    throw createRequestError('请先在 TaJiDuo 插件配置中填写 api_key')
+  }
+
   async request (urlPath, options = {}) {
     const {
       method = 'get',
       params,
       data,
       headers = {},
-      timeoutMs
+      timeoutMs,
+      withApiKey = true
     } = options
 
     let response
@@ -168,7 +204,10 @@ export default class TaJiDuoApi {
         method,
         params: isPlainObject(params) ? omitEmptyValues(params) : params,
         data: isPlainObject(data) ? omitEmptyValues(data) : data,
-        headers,
+        headers: {
+          ...(withApiKey ? buildApiKeyHeaders(this.getApiKey()) : {}),
+          ...headers
+        },
         timeout: normalizePositiveTimeout(timeoutMs, this.getDefaultTimeoutMs())
       })
     } catch (error) {
@@ -216,6 +255,13 @@ export default class TaJiDuoApi {
     })
   }
 
+  checkCaptcha (payload = {}) {
+    return this.request('/api/v1/login/tajiduo/captcha/check', {
+      method: 'post',
+      data: payload
+    })
+  }
+
   createSession (payload = {}, options = {}) {
     const platformId = String(options?.platformId || '').trim()
     const platformUserId = String(options?.platformUserId || '').trim()
@@ -237,6 +283,26 @@ export default class TaJiDuoApi {
     })
   }
 
+  listAccounts (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/login/tajiduo/accounts', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  setPrimaryAccount (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/login/tajiduo/accounts/primary', {
+      method: 'post',
+      data: fwt ? { fwt } : {},
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
   deleteAccount (fwt = '') {
     const token = String(fwt || '').trim()
     if (!token) {
@@ -246,6 +312,80 @@ export default class TaJiDuoApi {
     return this.request(`/api/v1/login/tajiduo/accounts/${encodeURIComponent(token)}`, {
       method: 'delete',
       headers: buildFrameworkHeaders(token)
+    })
+  }
+
+  health () {
+    return this.request('/health', {
+      method: 'get',
+      withApiKey: false
+    })
+  }
+
+  healthDetailed () {
+    return this.request('/health/detailed', {
+      method: 'get',
+      withApiKey: false
+    })
+  }
+
+  apiKeygenHealth () {
+    return this.request('/_internal/api-keygen/health', {
+      method: 'get',
+      withApiKey: false
+    })
+  }
+
+  generateApiKey (payload = {}, options = {}) {
+    const consoleKey = String(options?.consoleKey || payload?.consoleKey || '').trim()
+    const { consoleKey: _consoleKey, ...data } = payload || {}
+
+    return this.request('/_internal/api-keygen/generate', {
+      method: 'post',
+      data,
+      headers: buildConsoleKeyHeaders(consoleKey),
+      withApiKey: false
+    })
+  }
+
+  grantAdminApiKey (payload = {}, options = {}) {
+    const consoleKey = String(options?.consoleKey || payload?.consoleKey || '').trim()
+    const { consoleKey: _consoleKey, ...data } = payload || {}
+
+    return this.request('/_internal/api-keygen/grant-admin', {
+      method: 'post',
+      data,
+      headers: buildConsoleKeyHeaders(consoleKey),
+      withApiKey: false
+    })
+  }
+
+  listGames (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  listRedeemCodes (payload = {}) {
+    const query = omitEmptyValues({
+      gameCode: payload?.gameCode,
+      includeExpired: payload?.includeExpired
+    })
+
+    return this.request('/api/v1/games/redeem-codes', {
+      method: 'get',
+      params: query
+    })
+  }
+
+  createRedeemCode (payload = {}) {
+    return this.request('/api/v1/games/redeem-codes', {
+      method: 'post',
+      data: payload
     })
   }
 
@@ -271,6 +411,46 @@ export default class TaJiDuoApi {
     return this.request(`/api/v1/games/community/sign/tasks/${encodeURIComponent(taskKey)}`, {
       method: 'get',
       params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaRoles (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/roles', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaSignGame (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/sign/game', {
+      method: 'post',
+      data: payload,
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaSignAll (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/sign/all', {
+      method: 'post',
+      data: payload,
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaSignApp (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/sign/app', {
+      method: 'post',
+      data: payload,
       headers: buildFrameworkHeaders(fwt)
     })
   }
@@ -301,10 +481,30 @@ export default class TaJiDuoApi {
     })
   }
 
+  huantaCommunitySignState (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/community/sign/state', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
   huantaCommunityExpLevel (payload = {}) {
     const fwt = String(payload?.fwt || '').trim()
 
     return this.request('/api/v1/games/huanta/community/exp/level', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaCommunityExpRecords (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/huanta/community/exp/records', {
       method: 'get',
       params: buildFrameworkQuery(fwt),
       headers: buildFrameworkHeaders(fwt)
@@ -318,6 +518,16 @@ export default class TaJiDuoApi {
     return this.request('/api/v1/games/huanta/community/tasks', {
       method: 'get',
       params: buildFrameworkQuery(fwt, { gid }),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanSignApp (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/yihuan/sign/app', {
+      method: 'post',
+      data: payload,
       headers: buildFrameworkHeaders(fwt)
     })
   }
@@ -348,10 +558,30 @@ export default class TaJiDuoApi {
     })
   }
 
+  yihuanCommunitySignState (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/yihuan/community/sign/state', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
   yihuanCommunityExpLevel (payload = {}) {
     const fwt = String(payload?.fwt || '').trim()
 
     return this.request('/api/v1/games/yihuan/community/exp/level', {
+      method: 'get',
+      params: buildFrameworkQuery(fwt),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanCommunityExpRecords (payload = {}) {
+    const fwt = String(payload?.fwt || '').trim()
+
+    return this.request('/api/v1/games/yihuan/community/exp/records', {
       method: 'get',
       params: buildFrameworkQuery(fwt),
       headers: buildFrameworkHeaders(fwt)

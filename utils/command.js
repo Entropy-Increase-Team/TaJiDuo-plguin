@@ -1,36 +1,36 @@
-const COMMAND_PREFIXES = ['#', '=']
-const DEFAULT_COMMAND_PREFIX = '#'
+const COMMAND_PREFIXES = ['#塔吉多', '#tjd']
+const DEFAULT_COMMAND_PREFIX = COMMAND_PREFIXES[0]
+const CASE_INSENSITIVE_TJD_PATTERN = '#[Tt][Jj][Dd]'
 
 function escapeRegExp (value = '') {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-const COMMAND_PREFIX_PATTERN = `(?:${COMMAND_PREFIXES.map((item) => escapeRegExp(item)).join('|')})`
+const COMMAND_PREFIX_PATTERN = `(?:${escapeRegExp(COMMAND_PREFIXES[0])}|${CASE_INSENSITIVE_TJD_PATTERN})`
 
-function buildCommandReg (bodyPattern = '') {
-  return `^${COMMAND_PREFIX_PATTERN}\\s*${bodyPattern}$`
+function buildCommandReg (commandPattern = '') {
+  return `^${COMMAND_PREFIX_PATTERN}\\s*${commandPattern}$`
 }
 
-function stripCommandPrefix (message = '', commandLiteral = '') {
+function extractCommandArgs (message = '', commandPattern = '') {
   const text = String(message || '').trim()
-  const pattern = new RegExp(`^${COMMAND_PREFIX_PATTERN}\\s*${escapeRegExp(commandLiteral)}(?:\\s+|$)`)
-  const matched = text.match(pattern)
-
-  if (!matched) {
-    return ''
-  }
-
-  return text.slice(matched[0].length).trim()
+  const matched = text.match(new RegExp(`^${COMMAND_PREFIX_PATTERN}\\s*${commandPattern}\\s*(.*)$`))
+  return String(matched?.[1] || '').trim()
 }
 
-function formatCommand (command = '') {
-  return `${DEFAULT_COMMAND_PREFIX}${String(command || '').trim()}`
+function formatCommand (command = '', prefix = DEFAULT_COMMAND_PREFIX) {
+  return `${String(prefix || DEFAULT_COMMAND_PREFIX).trim()}${String(command || '').trim()}`
+}
+
+function formatCommandList (command = '') {
+  return COMMAND_PREFIXES.map((prefix) => formatCommand(command, prefix)).join(' / ')
 }
 
 export {
-  buildCommandReg,
   COMMAND_PREFIXES,
   DEFAULT_COMMAND_PREFIX,
+  buildCommandReg,
+  extractCommandArgs,
   formatCommand,
-  stripCommandPrefix
+  formatCommandList
 }

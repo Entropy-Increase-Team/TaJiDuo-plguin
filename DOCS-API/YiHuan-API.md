@@ -1,20 +1,22 @@
-# Huanta API
+# YiHuan API
 
-本文档描述幻塔模块接口。
+本文档描述异环模块接口。
 
 在调用本文件中的接口前，请先参考 [TaJiDuo-API.md](./TaJiDuo-API.md) 完成：
 
 - `fwt` 获取
+- API Key 传递方式
 - `X-Framework-Token` 传递方式
 - 平台层账号管理
 - 首次登录时由上游后端注入 `X-Platform-Id` 与 `X-Platform-User-Id`
 
 ## 模块信息
 
-- `gameCode = huanta`
-- `gameId = 1256`
-- `communityId = 1`
-- 路由前缀：`/api/v1/games/huanta`
+- `gameCode = yihuan`
+- 参考主游戏 `gameId = 1289`
+- `communityId = 2`
+- 路由前缀：`/api/v1/games/yihuan`
+- 当前只开放社区层能力
 
 ## 响应格式
 
@@ -46,7 +48,7 @@
 
 ## 登录态使用方式
 
-推荐只用 `fwt`：
+推荐只用：
 
 ```json
 {
@@ -54,18 +56,19 @@
 }
 ```
 
-或者：
+或者请求头：
 
 ```http
 X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 ```
 
-支持规则：
+补充：
 
 - 必须显式传 `fwt`
 - 支持请求体 `fwt`
 - 支持请求头 `X-Framework-Token`
 - 支持查询参数 `fwt`
+- 默认还需要传 `X-API-Key` 或 `Authorization: Bearer <api-key>`
 - 不接受原始 `accessToken / refreshToken / tgdUid / deviceId` 作为业务接口入口
 - 当前 `fwt` 无效、已删除或已失效时返回 `401`
 - 不再自动回落到主账号
@@ -74,127 +77,17 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 | 接口 | 用途 | 说明 |
 | --- | --- | --- |
-| `GET /api/v1/games/huanta/roles` | 拉取角色列表 | 读绑定角色 + 角色列表 |
-| `POST /api/v1/games/huanta/sign/game` | 单角色游戏签到 | 只处理一个 `roleId` |
-| `POST /api/v1/games/huanta/sign/all` | 幻塔聚合签到 | 社区签到 + 游戏签到 |
-| `POST /api/v1/games/huanta/sign/app` | 社区签到单步 | 只做社区签到 |
-| `POST /api/v1/games/huanta/community/sign/all` | 提交社区 5 步任务 | 不做游戏签到 |
-| `GET /api/v1/games/huanta/community/sign/tasks/:taskId` | 查询社区任务状态 | 返回异步执行结果 |
-| `GET /api/v1/games/huanta/community/sign/state` | 社区签到状态 | 查询是否已签到 |
-| `GET /api/v1/games/huanta/community/tasks` | 社区任务列表 | 默认 `gid = 2` |
-| `GET /api/v1/games/huanta/community/exp/level` | 社区等级 | 查询经验等级 |
-| `GET /api/v1/games/huanta/community/exp/records` | 社区经验流水 | 查询经验记录 |
+| `POST /api/v1/games/yihuan/sign/app` | 社区签到单步 | 只做签到 |
+| `POST /api/v1/games/yihuan/community/sign/all` | 提交社区 5 步任务 | 不做游戏签到 |
+| `GET /api/v1/games/yihuan/community/sign/tasks/:taskId` | 查询社区任务状态 | 返回异步执行结果 |
+| `GET /api/v1/games/yihuan/community/sign/state` | 社区签到状态 | 查询是否已签到 |
+| `GET /api/v1/games/yihuan/community/tasks` | 社区任务列表 | 默认 `gid = 2` |
+| `GET /api/v1/games/yihuan/community/exp/level` | 社区等级 | 查询经验等级 |
+| `GET /api/v1/games/yihuan/community/exp/records` | 社区经验流水 | 查询经验记录 |
 
-## 游戏接口
+## 核心接口
 
-### `GET /api/v1/games/huanta/roles`
-
-推荐请求头：
-
-```http
-X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
-```
-
-也支持查询参数：
-
-```bash
-curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
-```
-
-作用：
-
-- 聚合绑定角色
-- 聚合角色列表
-- 给 `sign/game` 和 `sign/all` 提供 `roleId`
-
-说明：
-
-- 现在使用 `GET`
-- 必须显式传 `fwt`
-- 当前 `fwt` 无效、已删除或已失效时返回 `401`
-- 不再自动回落到主账号
-
-响应示例：
-
-```json
-{
-  "code": 0,
-  "message": "成功",
-  "data": {
-    "deviceId": "device-x",
-    "tgdUid": "10001",
-    "roles": [
-      {
-        "roleId": "20001",
-        "roleName": "Aster",
-        "gameId": "1256"
-      },
-      {
-        "roleId": "20002",
-        "roleName": "Shirli",
-        "gameId": "1256"
-      }
-    ],
-    "upstream": {
-      "bindRole": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      },
-      "gameRoles": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      }
-    }
-  }
-}
-```
-
-### `POST /api/v1/games/huanta/sign/game`
-
-请求：
-
-```json
-{
-  "fwt": "0d53c6f8f56f4d7abf53dbf4f68e7856",
-  "roleId": "20001"
-}
-```
-
-作用：
-
-- 只执行单个角色的游戏签到
-
-说明：
-
-- 必须显式传 `fwt`
-- 当前 `fwt` 无效、已删除或已失效时返回 `401`
-- `roleId` 仍然必须显式传
-
-响应示例：
-
-```json
-{
-  "code": 0,
-  "message": "成功",
-  "data": {
-    "success": true,
-    "httpStatus": 200,
-    "code": 0,
-    "message": "ok"
-  }
-}
-```
-
-说明：
-
-- 这个接口直接返回单次游戏签到的上游归一化结果
-- 与 `sign/all` 不同，它不会额外整理成角色级摘要
-
-### `POST /api/v1/games/huanta/sign/all`
+### `POST /api/v1/games/yihuan/sign/app`
 
 请求：
 
@@ -204,27 +97,9 @@ curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
 }
 ```
 
-也支持显式传角色：
+作用：
 
-```json
-{
-  "fwt": "0d53c6f8f56f4d7abf53dbf4f68e7856",
-  "roles": [
-    {
-      "roleId": "20001",
-      "roleName": "Aster",
-      "gameId": "1256"
-    }
-  ]
-}
-```
-
-它会尽量完成：
-
-1. 使用已保存 `refreshToken` 刷新账号
-2. 自动补拉角色
-3. 执行 `sign/app`
-4. 对每个角色执行 `sign/game`
+- 只做异环社区签到单步
 
 响应示例：
 
@@ -233,113 +108,7 @@ curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
   "code": 0,
   "message": "成功",
   "data": {
-    "deviceId": "device-x",
-    "tgdUid": "10001",
-    "roles": [
-      {
-        "roleId": "20001",
-        "roleName": "Aster",
-        "gameId": "1256"
-      },
-      {
-        "roleId": "20002",
-        "roleName": "Shirli",
-        "gameId": "1256"
-      }
-    ],
-    "app": {
-      "success": true,
-      "message": "社区任务签到成功，获得5经验，12金币",
-      "exp": 5,
-      "goldCoin": 12
-    },
-    "games": [
-      {
-        "role": {
-          "roleId": "20001",
-          "roleName": "Aster",
-          "gameId": "1256"
-        },
-        "success": true,
-        "message": "获得墨晶*50",
-        "reward": "获得墨晶*50"
-      },
-      {
-        "role": {
-          "roleId": "20002",
-          "roleName": "Shirli",
-          "gameId": "1256"
-        },
-        "success": true,
-        "message": "获得墨晶*50",
-        "reward": "获得墨晶*50"
-      }
-    ],
-    "upstream": {
-      "refresh": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      },
-      "bindRole": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      },
-      "gameRoles": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      },
-      "signState": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      },
-      "signRewards": {
-        "success": true,
-        "httpStatus": 200,
-        "code": 0,
-        "message": "ok"
-      }
-    }
-  }
-}
-```
-
-说明：
-
-- 必须显式传 `fwt`
-- 当前 `fwt` 无效、已删除或已失效时返回 `401`
-- 如果本次走的是已保存账号，刷新后的原始 token 只会回写数据库
-- 响应里不会返回 `accessToken`、`refreshToken`
-- `app` 是社区签到摘要
-- `games[*]` 是每个角色的游戏签到摘要
-
-## 社区接口
-
-### `POST /api/v1/games/huanta/sign/app`
-
-请求：
-
-```json
-{
-  "fwt": "0d53c6f8f56f4d7abf53dbf4f68e7856"
-}
-```
-
-响应示例：
-
-```json
-{
-  "code": 0,
-  "message": "成功",
-  "data": {
-    "communityId": "1",
+    "communityId": "2",
     "success": true,
     "message": "社区任务签到成功，获得5经验，12金币",
     "exp": 5,
@@ -348,7 +117,11 @@ curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
       "success": true,
       "httpStatus": 200,
       "code": 0,
-      "message": "ok"
+      "message": "ok",
+      "data": {
+        "exp": 5,
+        "goldCoin": 12
+      }
     }
   }
 }
@@ -356,10 +129,12 @@ curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
 
 说明：
 
+- 如果今天已经签过，会被归一化成成功响应
+- `alreadySigned` 为 `true` 时表示今天已签过
 - 必须显式传 `fwt`
 - 当前 `fwt` 无效、已删除或已失效时返回 `401`
 
-### `POST /api/v1/games/huanta/community/sign/all`
+### `POST /api/v1/games/yihuan/community/sign/all`
 
 请求：
 
@@ -388,14 +163,14 @@ curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
   "code": 0,
   "message": "任务已开始",
   "data": {
-    "taskId": "5a8b9f3df3b646efa2ce8663427440a1",
-    "gameCode": "huanta",
-    "gameName": "幻塔",
+    "taskId": "c593bf0748c7496dbe6f50fce89a6b5b",
+    "gameCode": "yihuan",
+    "gameName": "异环",
     "scope": "community-game",
     "status": "pending",
     "completed": false,
     "message": "任务已创建",
-    "createdAt": "2026-04-21T12:05:00+08:00",
+    "createdAt": "2026-04-21T12:10:00+08:00",
     "request": {
       "deviceId": "a054f73b9a3f9aafd1f8b006e8a595d9",
       "tgdUid": "10193432",
@@ -412,18 +187,17 @@ curl -sS "http://127.0.0.1:9191/api/v1/games/huanta/roles?fwt=your-fwt"
 
 - 必须显式传 `fwt`
 - 如果当前 `fwt` 无效、已删除，或预检时上游明确判定登录态失效，直接返回 `401`，不会创建任务
-- 这是社区任务接口，不是游戏签到接口
-- 如果同一个 `fwt` 已经有一个幻塔社区任务在执行，会直接返回同一个 `taskId`
+- 如果同一个 `fwt` 已经有一个异环社区任务在执行，会直接返回同一个 `taskId`
 - 复用已有任务时，顶层 `message` 会是 `已有进行中的任务`
-- `betweenCommunitiesMs` 在单社区接口里不生效
 - 真正执行结果需要再调用状态查询接口
 
-### `GET /api/v1/games/huanta/community/sign/tasks/:taskId`
+### `GET /api/v1/games/yihuan/community/sign/tasks/:taskId`
 
 请求示例：
 
 ```http
-GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?fwt=0d53c6f8f56f4d7abf53dbf4f68e7856
+GET /api/v1/games/yihuan/community/sign/tasks/c593bf0748c7496dbe6f50fce89a6b5b?fwt=0d53c6f8f56f4d7abf53dbf4f68e7856
+X-API-Key: your-api-key
 ```
 
 执行完成响应示例：
@@ -433,17 +207,17 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
   "code": 0,
   "message": "成功",
   "data": {
-    "taskId": "5a8b9f3df3b646efa2ce8663427440a1",
-    "gameCode": "huanta",
-    "gameName": "幻塔",
+    "taskId": "c593bf0748c7496dbe6f50fce89a6b5b",
+    "gameCode": "yihuan",
+    "gameName": "异环",
     "scope": "community-game",
     "status": "finished",
     "completed": true,
     "success": true,
     "message": "社区任务全部完成",
-    "createdAt": "2026-04-21T12:05:00+08:00",
-    "startedAt": "2026-04-21T12:05:00+08:00",
-    "finishedAt": "2026-04-21T12:05:46+08:00",
+    "createdAt": "2026-04-21T12:10:00+08:00",
+    "startedAt": "2026-04-21T12:10:00+08:00",
+    "finishedAt": "2026-04-21T12:10:47+08:00",
     "request": {
       "deviceId": "a054f73b9a3f9aafd1f8b006e8a595d9",
       "tgdUid": "10193432",
@@ -454,9 +228,9 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
     },
     "result": {
       "item": {
-        "gameCode": "huanta",
-        "gameName": "幻塔",
-        "communityId": "1",
+        "gameCode": "yihuan",
+        "gameName": "异环",
+        "communityId": "2",
         "deviceId": "a054f73b9a3f9aafd1f8b006e8a595d9",
         "tgdUid": "10193432",
         "success": true,
@@ -473,12 +247,28 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
             "limitTimes": 1,
             "targetTimes": 1,
             "remaining": 1
+          },
+          {
+            "taskKey": "browse_post_exp",
+            "title": "浏览帖子",
+            "completeTimes": 0,
+            "limitTimes": 1,
+            "targetTimes": 1,
+            "remaining": 1
           }
         ],
         "tasksAfter": [
           {
             "taskKey": "signin_exp",
             "title": "签到",
+            "completeTimes": 1,
+            "limitTimes": 1,
+            "targetTimes": 1,
+            "remaining": 0
+          },
+          {
+            "taskKey": "browse_post_exp",
+            "title": "浏览帖子",
             "completeTimes": 1,
             "limitTimes": 1,
             "targetTimes": 1,
@@ -496,6 +286,17 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
             "successCount": 1,
             "success": true,
             "message": "社区任务签到成功，获得5经验，12金币"
+          },
+          {
+            "taskKey": "browse_post_exp",
+            "title": "浏览帖子",
+            "planned": 1,
+            "alreadyComplete": 0,
+            "remainingBefore": 1,
+            "attempted": 1,
+            "successCount": 1,
+            "success": true,
+            "message": "浏览帖子任务完成"
           }
         ]
       }
@@ -510,8 +311,10 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
 - 只能查询当前 `fwt` 自己提交的任务
 - 如果当前 `fwt` 已失效，或任务结果已经明确识别到需要重新登录，接口直接返回 `401`
 - `status` 只有 `pending`、`running`、`finished`、`failed`
-- `result.item.tasksBefore` / `result.item.tasksAfter` 的结构与 `community/tasks` 一致
-- 当前“社区任务全部完成”只按 5 个主动任务判断
+- `result.item.tasksBefore` / `result.item.tasksAfter` 来自任务列表接口
+- `result.item.steps` 表示本次主动执行的 5 个任务
+- 当前“社区任务全部完成”只按这 5 个主动任务判断
+- `被点赞帖子`、`被回复`、`被收藏` 这类被动任务即使仍未完成，也会继续体现在 `result.item.tasksAfter`
 
 登录态失效响应示例：
 
@@ -520,9 +323,9 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
   "code": 401,
   "message": "当前 fwt 已失效，请重新登录",
   "data": {
-    "taskId": "5a8b9f3df3b646efa2ce8663427440a1",
-    "gameCode": "huanta",
-    "gameName": "幻塔",
+    "taskId": "c593bf0748c7496dbe6f50fce89a6b5b",
+    "gameCode": "yihuan",
+    "gameName": "异环",
     "scope": "community-game",
     "status": "failed",
     "completed": true,
@@ -532,7 +335,7 @@ GET /api/v1/games/huanta/community/sign/tasks/5a8b9f3df3b646efa2ce8663427440a1?f
 }
 ```
 
-### `GET /api/v1/games/huanta/community/sign/state`
+### `GET /api/v1/games/yihuan/community/sign/state`
 
 请求头：
 
@@ -547,7 +350,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
   "code": 0,
   "message": "成功",
   "data": {
-    "communityId": "1",
+    "communityId": "2",
     "signed": true,
     "upstream": {
       "success": true,
@@ -564,14 +367,17 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 - 必须显式传 `fwt`
 - 现在使用 `GET`
+- 这个接口只表示“今天社区签到是否已完成”
+- 不表示整套社区任务是否全部完成
 - 如果上游明确判定登录态失效，接口会转成 `401`
 
-### `GET /api/v1/games/huanta/community/tasks`
+### `GET /api/v1/games/yihuan/community/tasks`
 
 请求：
 
 ```http
-GET /api/v1/games/huanta/community/tasks?gid=2
+GET /api/v1/games/yihuan/community/tasks?gid=2
+X-API-Key: your-api-key
 X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 ```
 
@@ -582,7 +388,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
   "code": 0,
   "message": "成功",
   "data": {
-    "communityId": "1",
+    "communityId": "2",
     "gid": 2,
     "groups": [
       {
@@ -625,7 +431,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 - 现在使用 `GET`
 - 这是“任务完成情况接口”
 - 如果上游明确判定登录态失效，接口会转成 `401`
-- 判断是否完成，通常看 `completeTimes >= limitTimes`
+- 判断某项任务是否完成，通常看 `completeTimes >= limitTimes`；如果 `limitTimes` 为空，再看 `targetTimes`
 - 当前主动执行的 5 个任务对应：
   - `signin_exp`
   - `browse_post_exp`
@@ -634,7 +440,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
   - `like_post_exp`
 - 上游还可能返回 `被点赞帖子`、`被回复`、`被收藏` 等其他任务项，具体 `taskKey` 以上游实际返回为准
 
-### `GET /api/v1/games/huanta/community/exp/level`
+### `GET /api/v1/games/yihuan/community/exp/level`
 
 请求头：
 
@@ -649,7 +455,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
   "code": 0,
   "message": "成功",
   "data": {
-    "communityId": "1",
+    "communityId": "2",
     "exp": 95,
     "level": 2,
     "levelExp": 55,
@@ -672,7 +478,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 - 现在使用 `GET`
 - 如果上游明确判定登录态失效，接口会转成 `401`
 
-### `GET /api/v1/games/huanta/community/exp/records`
+### `GET /api/v1/games/yihuan/community/exp/records`
 
 请求头：
 
@@ -687,10 +493,10 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
   "code": 0,
   "message": "成功",
   "data": {
-    "communityId": "1",
+    "communityId": "2",
     "items": [
       {
-        "communityId": "1",
+        "communityId": "2",
         "title": "签到",
         "sourceId": "10869184",
         "uid": "10193432",
@@ -706,25 +512,17 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 说明：
 
+- 这是经验流水接口
+- `title` 为经验来源说明
+- `num` 为本次经验增量
 - 必须显式传 `fwt`
 - 现在使用 `GET`
 - 如果上游明确判定登录态失效，接口会转成 `401`
 
-## 默认发帖内容
-
-社区 5 步任务里的“发送主帖”默认固定为：
-
-- 标题：`每日打卡`
-- 正文从以下 3 个里随机：
-  - `打卡~`
-  - `打卡打卡`
-  - `早早早`
-
-当前“发送评论”默认固定为：
-
-- `hihihi`
-
 ## 当前边界
 
+- 当前没有 `POST /api/v1/games/yihuan/roles`
+- 当前没有 `POST /api/v1/games/yihuan/sign/game`
+- 当前没有 `POST /api/v1/games/yihuan/sign/all`
 - `community/sign/all` 当前只会主动执行 5 个任务，不会主动补 `被点赞帖子`、`被回复`、`被收藏`
-- `sign/game` 是单角色直接签到接口，返回的是单次上游归一化结果，不是聚合摘要
+- 不要把 HAR 里出现的 `1257` 当成异环主游戏 ID

@@ -2,6 +2,7 @@ import plugin from '../../../lib/plugins/plugin.js'
 import common from '../../../lib/common/common.js'
 import TaJiDuoApi from '../model/api.js'
 import { clearUserSession, getUserSession, listUserSessions } from '../model/store.js'
+import Config from '../utils/config.js'
 import {
   AUTH_EXPIRED_MESSAGE,
   LOGIN_COMMAND_EXAMPLE,
@@ -9,18 +10,9 @@ import {
   getErrorMessage,
   isAuthExpiredError
 } from '../utils/auth.js'
-import Config from '../utils/config.js'
-import { buildCommandReg } from '../utils/command.js'
 import { joinLines, normalizeNonNegativeInt, pickFirstNonEmpty } from '../utils/common.js'
+import { buildCommandReg } from '../utils/command.js'
 
-const PLATFORM_ALIAS = '(?:TaJiDuo|tajiduo|TAJIDUO|塔吉多)'
-
-const ALL_COMMUNITY_SIGN_REG = buildCommandReg(`${PLATFORM_ALIAS}社区签到`)
-const HUANTA_COMMUNITY_SIGN_REG = buildCommandReg(`${PLATFORM_ALIAS}幻塔社区签到`)
-const YIHUAN_COMMUNITY_SIGN_REG = buildCommandReg(`${PLATFORM_ALIAS}异环社区签到`)
-const ALL_COMMUNITY_QUERY_REG = buildCommandReg(`${PLATFORM_ALIAS}社区查询`)
-const HUANTA_COMMUNITY_QUERY_REG = buildCommandReg(`${PLATFORM_ALIAS}幻塔社区查询`)
-const YIHUAN_COMMUNITY_QUERY_REG = buildCommandReg(`${PLATFORM_ALIAS}异环社区查询`)
 const DEFAULT_TASK_GID = 2
 const COMMUNITY_TASK_POLL_INTERVAL_MS = 2000
 const ACTIVE_COMMUNITY_TASK_KEYS = new Set([
@@ -30,7 +22,8 @@ const ACTIVE_COMMUNITY_TASK_KEYS = new Set([
   'send_comment_exp',
   'like_post_exp'
 ])
-const COMMUNITY_GAME_CONFIG = Object.freeze({
+
+const COMMUNITY_GAMES = Object.freeze({
   huanta: {
     key: 'huanta',
     name: '幻塔',
@@ -54,19 +47,26 @@ const COMMUNITY_GAME_CONFIG = Object.freeze({
     fetchTasksMethod: 'yihuanCommunityTasks'
   }
 })
+
+const COMMUNITY_GAME_KEYS = Object.freeze(Object.keys(COMMUNITY_GAMES))
+
 const ALL_COMMUNITY_META = Object.freeze({
   signTitle: '塔吉多社区签到',
   queryTitle: '塔吉多社区查询',
   queryForwardTitle: '塔吉多社区查询结果'
 })
-const COMMUNITY_GAME_KEYS = Object.freeze(Object.keys(COMMUNITY_GAME_CONFIG))
 
 function isPlainObject (value) {
   return value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function getCommunityGameConfig (gameKey = '') {
-  return COMMUNITY_GAME_CONFIG[String(gameKey || '').trim()]
+function sleep (ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)))
+}
+
+function toFiniteNumber (value) {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : undefined
 }
 
 function getConfiguredDelay (key, fallback) {
@@ -88,8 +88,8 @@ function buildAllCommunityPayload (fwt = '') {
   }
 }
 
-function sleep (ms = 0) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)))
+function getCommunityConfig (gameKey = '') {
+  return COMMUNITY_GAMES[String(gameKey || '').trim()]
 }
 
 function getTaskStatus (payload = {}) {
@@ -120,29 +120,6 @@ function extractTaskErrorMessage (payload = {}) {
   ).trim()
 }
 
-function pickLevelValue (payload = {}, ...keys) {
-  const sources = [
-    payload,
-    payload?.data,
-    payload?.upstream?.data,
-    payload?.upstream
-  ].filter((item) => isPlainObject(item))
-
-  for (const key of keys) {
-    const value = pickFirstNonEmpty(...sources.map((item) => item?.[key]))
-    if (value !== undefined) {
-      return value
-    }
-  }
-
-  return undefined
-}
-
-function toFiniteNumber (value) {
-  const num = Number(value)
-  return Number.isFinite(num) ? num : undefined
-}
-
 function getTaskProgressTarget (task = {}) {
   const limitTimes = toFiniteNumber(task?.limitTimes)
   if (limitTimes !== undefined && limitTimes > 0) {
@@ -170,6 +147,20 @@ function isTaskCompleted (task = {}) {
   return getTaskCompleteTimes(task) >= target
 }
 
+function formatTaskProgress (task = {}) {
+  const target = getTaskProgressTarget(task)
+  if (target === undefined) {
+    return `${getTaskCompleteTimes(task)}`
+  }
+
+  return `${getTaskCompleteTimes(task)}/${target}`
+}
+
+function formatPendingTask (task = {}) {
+  const title = task?.title || task?.taskKey || '未知任务'
+  return `${title} ${formatTaskProgress(task)}`
+}
+
 function getCommunityTaskGroups (data = {}) {
   const groups = Array.isArray(data?.groups) ? data.groups : []
 
@@ -182,59 +173,44 @@ function getCommunityTaskGroups (data = {}) {
 }
 
 function flattenCommunityTaskItems (data = {}) {
-  return getCommunityTaskGroups(data).flatMap((group) => group.items.map((item) => ({
-    ...item,
-    groupKey: group.key
-  })))
+  return getCommunityTaskGroups(data).flatMap((group) => {
+    return group.items.map((item) => ({
+      ...item,
+      groupKey: group.key
+    }))
+  })
 }
 
-function formatTaskProgress (task = {}) {
-  const completeTimes = getTaskCompleteTimes(task)
-  const target = getTaskProgressTarget(task)
-
-  if (target === undefined) {
-    return `${completeTimes}`
+function findCommunityItemByGameCode (data = {}, gameCode = '') {
+  const normalizedCode = String(gameCode || '').trim()
+  if (!normalizedCode) {
+    return null
   }
 
-  return `${completeTimes}/${target}`
+  if (isPlainObject(data?.[normalizedCode])) {
+    return data[normalizedCode]
+  }
+
+  const items = Array.isArray(data?.items) ? data.items : []
+  return items.find((item) => String(item?.gameCode || '').trim() === normalizedCode) || null
 }
 
-function formatPendingTask (task = {}) {
-  const taskTitle = task?.title || task?.taskKey || '未知任务'
-  return `${taskTitle} ${formatTaskProgress(task)}`
-}
-
-function buildTaskSnapshotLines (title = '', tasks = []) {
-  const items = Array.isArray(tasks) ? tasks : []
-  if (items.length === 0) return []
-
-  const lines = [`${title}：`]
-
-  items.forEach((task, index) => {
-    const taskTitle = task?.title || task?.taskKey || `任务${index + 1}`
-    const completeTimes = Number(task?.completeTimes)
-    const limitTimes = Number(task?.limitTimes)
-    const isCompleted = Number.isFinite(limitTimes) && limitTimes > 0 && Number.isFinite(completeTimes) && completeTimes >= limitTimes
-    const parts = []
-
-    if (isCompleted) {
-      parts.push('已完成')
-    } else if (task?.completeTimes !== undefined || task?.limitTimes !== undefined) {
-      parts.push(`${task?.completeTimes ?? 0}/${task?.limitTimes ?? '?'}`)
-    }
-
-    if (task?.remaining !== undefined) {
-      parts.push(`剩余 ${task.remaining}`)
-    }
-
-    lines.push(`${index + 1}. ${taskTitle}${parts.length > 0 ? `：${parts.join(' | ')}` : ''}`)
-  })
-
-  return lines
+function getNestedCommunitySections (data = {}) {
+  return COMMUNITY_GAME_KEYS
+    .map((gameKey) => {
+      const config = getCommunityConfig(gameKey)
+      return {
+        title: `${config?.name || gameKey}社区`,
+        section: findCommunityItemByGameCode(data, gameKey)
+      }
+    })
+    .filter(({ section }) => isPlainObject(section))
 }
 
 function summarizeResultObject (value = {}) {
-  if (!isPlainObject(value)) return ''
+  if (!isPlainObject(value)) {
+    return ''
+  }
 
   const parts = []
 
@@ -253,33 +229,44 @@ function summarizeResultObject (value = {}) {
   return parts.join(' | ')
 }
 
-function findCommunityItemByGameCode (data = {}, gameCode = '') {
-  const code = String(gameCode || '').trim()
-  if (!code) return null
-
-  if (isPlainObject(data?.[code])) {
-    return data[code]
-  }
-
-  const items = Array.isArray(data?.items) ? data.items : []
-  return items.find((item) => String(item?.gameCode || '').trim() === code) || null
-}
-
 function buildResultLine (data = {}, fallback = '已返回结果') {
   const summary = summarizeResultObject(data)
   return `结果：${summary || fallback}`
 }
 
-function getNestedCommunitySections (data = {}) {
-  return COMMUNITY_GAME_KEYS
-    .map((gameKey) => {
-      const config = getCommunityGameConfig(gameKey)
-      return {
-        title: `${config?.name || gameKey}社区`,
-        section: findCommunityItemByGameCode(data, gameKey)
-      }
-    })
-    .filter(({ section }) => isPlainObject(section))
+function buildTaskSnapshotLines (title = '', tasks = []) {
+  const items = Array.isArray(tasks) ? tasks : []
+  if (items.length === 0) {
+    return []
+  }
+
+  const lines = [`${title}：`]
+
+  items.forEach((task, index) => {
+    const taskTitle = task?.title || task?.taskKey || `任务${index + 1}`
+    const completeTimes = Number(task?.completeTimes)
+    const limitTimes = Number(task?.limitTimes)
+    const parts = []
+
+    if (
+      Number.isFinite(limitTimes) &&
+      limitTimes > 0 &&
+      Number.isFinite(completeTimes) &&
+      completeTimes >= limitTimes
+    ) {
+      parts.push('已完成')
+    } else if (task?.completeTimes !== undefined || task?.limitTimes !== undefined) {
+      parts.push(`${task?.completeTimes ?? 0}/${task?.limitTimes ?? '?'}`)
+    }
+
+    if (task?.remaining !== undefined) {
+      parts.push(`剩余 ${task.remaining}`)
+    }
+
+    lines.push(`${index + 1}. ${taskTitle}${parts.length > 0 ? `：${parts.join(' | ')}` : ''}`)
+  })
+
+  return lines
 }
 
 function buildNestedCommunityLines (data = {}) {
@@ -288,14 +275,14 @@ function buildNestedCommunityLines (data = {}) {
   for (const { title, section } of getNestedCommunitySections(data)) {
     lines.push(`${title}：${summarizeResultObject(section) || '已返回结果'}`)
 
-    const before = buildTaskSnapshotLines(`${title}执行前任务`, section?.tasksBefore)
-    if (before.length > 0) {
-      lines.push(...before)
+    const beforeLines = buildTaskSnapshotLines(`${title}执行前任务`, section?.tasksBefore)
+    if (beforeLines.length > 0) {
+      lines.push(...beforeLines)
     }
 
-    const after = buildTaskSnapshotLines(`${title}执行后任务`, section?.tasksAfter)
-    if (after.length > 0) {
-      lines.push(...after)
+    const afterLines = buildTaskSnapshotLines(`${title}执行后任务`, section?.tasksAfter)
+    if (afterLines.length > 0) {
+      lines.push(...afterLines)
     }
 
     lines.push('')
@@ -308,47 +295,63 @@ function buildNestedCommunityLines (data = {}) {
   return lines
 }
 
-function buildNestedCommunityMessages (data = {}) {
-  return getNestedCommunitySections(data)
-    .map(({ title, section }) => buildCommunityReply(`${title}执行完成`, section))
-    .filter(Boolean)
-}
-
 function buildCommunityReply (title = '', data = {}) {
   const lines = [
     title,
     summarizeResultObject(data) ? buildResultLine(data, '') : ''
   ]
 
-  const before = buildTaskSnapshotLines('执行前任务', data?.tasksBefore)
-  if (before.length > 0) {
-    lines.push('', ...before)
+  const beforeLines = buildTaskSnapshotLines('执行前任务', data?.tasksBefore)
+  if (beforeLines.length > 0) {
+    lines.push('', ...beforeLines)
   }
 
-  const after = buildTaskSnapshotLines('执行后任务', data?.tasksAfter)
-  if (after.length > 0) {
-    lines.push('', ...after)
+  const afterLines = buildTaskSnapshotLines('执行后任务', data?.tasksAfter)
+  if (afterLines.length > 0) {
+    lines.push('', ...afterLines)
   }
 
-  const nested = buildNestedCommunityLines(data)
-  if (nested.length > 0) {
-    lines.push('', ...nested)
+  const nestedLines = buildNestedCommunityLines(data)
+  if (nestedLines.length > 0) {
+    lines.push('', ...nestedLines)
   }
 
   return joinLines(lines)
 }
 
 function buildAllCommunitySignMessages (data = {}) {
-  const summary = joinLines([
+  const summaryMessage = joinLines([
     `${ALL_COMMUNITY_META.signTitle}执行完成`,
     buildResultLine(data)
   ])
 
-  const detailMessages = buildNestedCommunityMessages(data)
-  return [summary, ...detailMessages].filter(Boolean)
+  const detailMessages = getNestedCommunitySections(data)
+    .map(({ title, section }) => buildCommunityReply(`${title}执行完成`, section))
+    .filter(Boolean)
+
+  return [summaryMessage, ...detailMessages]
+}
+
+function pickLevelValue (payload = {}, ...keys) {
+  const sources = [
+    payload,
+    payload?.data,
+    payload?.upstream?.data,
+    payload?.upstream
+  ].filter((item) => isPlainObject(item))
+
+  for (const key of keys) {
+    const value = pickFirstNonEmpty(...sources.map((item) => item?.[key]))
+    if (value !== undefined) {
+      return value
+    }
+  }
+
+  return undefined
 }
 
 function buildCommunityLevelLines (data = {}) {
+  const lines = []
   const level = pickLevelValue(data, 'level', 'expLevel')
   const currentExp = pickLevelValue(data, 'currentExp', 'curExp', 'exp', 'totalExp')
   const levelExp = pickLevelValue(data, 'levelExp')
@@ -363,8 +366,6 @@ function buildCommunityLevelLines (data = {}) {
       data?.upstream?.msg
     ) || ''
   ).trim()
-
-  const lines = []
 
   if (level !== undefined) {
     lines.push(`等级：${level}`)
@@ -499,7 +500,7 @@ function buildCommunityQueryMessages (communityName = '', levelData, tasksData, 
 
 function buildAllCommunityQueryMessages (resultMap = {}) {
   return COMMUNITY_GAME_KEYS.flatMap((gameKey) => {
-    const config = getCommunityGameConfig(gameKey)
+    const config = getCommunityConfig(gameKey)
     const result = resultMap[gameKey] || {}
     return buildCommunityQueryMessages(config?.name || gameKey, result.levelData, result.tasksData, result.errors)
   })
@@ -547,24 +548,23 @@ function describeAutoSignTarget (item = {}) {
   return parts.join(' | ') || '未命名账号'
 }
 
-export class TaJiDuoCommunitySign extends plugin {
-  constructor (e) {
+export class Sign extends plugin {
+  constructor () {
     super({
       name: '[TaJiDuo-plugin] 社区签到',
-      dsc: 'TaJiDuo 社区签到',
+      dsc: 'TaJiDuo 社区签到与社区查询',
       event: 'message',
       priority: 100,
       rule: [
-        { reg: ALL_COMMUNITY_SIGN_REG, fnc: 'signAllCommunities' },
-        { reg: HUANTA_COMMUNITY_SIGN_REG, fnc: 'signHuantaCommunity' },
-        { reg: YIHUAN_COMMUNITY_SIGN_REG, fnc: 'signYihuanCommunity' },
-        { reg: ALL_COMMUNITY_QUERY_REG, fnc: 'queryAllCommunities' },
-        { reg: HUANTA_COMMUNITY_QUERY_REG, fnc: 'queryHuantaCommunity' },
-        { reg: YIHUAN_COMMUNITY_QUERY_REG, fnc: 'queryYihuanCommunity' }
+        { reg: buildCommandReg('社区签到'), fnc: 'signAllCommunities' },
+        { reg: buildCommandReg('幻塔社区签到'), fnc: 'signHuantaCommunity' },
+        { reg: buildCommandReg('异环社区签到'), fnc: 'signYihuanCommunity' },
+        { reg: buildCommandReg('社区查询'), fnc: 'queryAllCommunities' },
+        { reg: buildCommandReg('幻塔社区查询'), fnc: 'queryHuantaCommunity' },
+        { reg: buildCommandReg('异环社区查询'), fnc: 'queryYihuanCommunity' }
       ]
     })
 
-    this.e = e
     this.api = new TaJiDuoApi()
     this.task = [
       {
@@ -573,6 +573,284 @@ export class TaJiDuoCommunitySign extends plugin {
         fnc: () => this.autoDailyCommunitySign()
       }
     ]
+  }
+
+  async signAllCommunities () {
+    try {
+      const fwt = await this.getStoredFwt()
+      await this.reply(`${ALL_COMMUNITY_META.signTitle}开始执行，请稍候...`)
+      const data = await this.runAllCommunitySign(fwt)
+      await this.replyQueryForward(`${ALL_COMMUNITY_META.signTitle}结果`, buildAllCommunitySignMessages(data))
+      return true
+    } catch (error) {
+      return this.replyFailure(`${ALL_COMMUNITY_META.signTitle}失败`, error)
+    }
+  }
+
+  async signHuantaCommunity () {
+    return this.executeSingleCommunitySign('huanta')
+  }
+
+  async signYihuanCommunity () {
+    return this.executeSingleCommunitySign('yihuan')
+  }
+
+  async queryAllCommunities () {
+    try {
+      const fwt = await this.getStoredFwt()
+      await this.reply(`${ALL_COMMUNITY_META.queryTitle}开始执行，请稍候...`)
+
+      const queryResult = await this.fetchAllCommunityQueryResults(fwt)
+      if (queryResult.authError) {
+        throw queryResult.authError
+      }
+
+      if (!queryResult.hasAnyData) {
+        throw new Error(queryResult.results
+          .flatMap((item) => [item?.errors?.level, item?.errors?.tasks])
+          .filter(Boolean)
+          .join(' | ') || '未获取到社区数据')
+      }
+
+      await this.replyQueryForward(
+        ALL_COMMUNITY_META.queryForwardTitle,
+        buildAllCommunityQueryMessages(queryResult.resultMap)
+      )
+      return true
+    } catch (error) {
+      return this.replyFailure(`${ALL_COMMUNITY_META.queryTitle}失败`, error)
+    }
+  }
+
+  async queryHuantaCommunity () {
+    return this.executeSingleCommunityQuery('huanta')
+  }
+
+  async queryYihuanCommunity () {
+    return this.executeSingleCommunityQuery('yihuan')
+  }
+
+  async autoDailyCommunitySign () {
+    const sessions = await listUserSessions()
+    if (sessions.length === 0) {
+      logger.info('[TaJiDuo-plugin] 每日 00:20 自动社区签到跳过：当前没有已保存账号')
+      return true
+    }
+
+    logger.info(`[TaJiDuo-plugin] 每日 00:20 自动社区签到开始，共 ${sessions.length} 个账号`)
+
+    let successCount = 0
+
+    for (const item of sessions) {
+      const targetText = describeAutoSignTarget(item)
+
+      try {
+        const data = await this.runAllCommunitySign(item.session.fwt)
+        successCount += 1
+        logger.info(`[TaJiDuo-plugin] 自动社区签到成功：${targetText} | ${summarizeResultObject(data) || '执行完成'}`)
+      } catch (error) {
+        if (isAuthExpiredError(error)) {
+          await clearUserSession(item.selfId, item.userId)
+          logger.warn(`[TaJiDuo-plugin] 自动社区签到登录失效，已清理本地会话：${targetText} | ${getErrorMessage(error)}`)
+          continue
+        }
+
+        logger.error(`[TaJiDuo-plugin] 自动社区签到失败：${targetText} | ${getErrorMessage(error)}`)
+      }
+    }
+
+    logger.info(`[TaJiDuo-plugin] 每日 00:20 自动社区签到完成：${successCount}/${sessions.length}`)
+    return true
+  }
+
+  async executeSingleCommunitySign (gameKey = '') {
+    const { config } = this.getSingleCommunityApiMethods(gameKey)
+
+    try {
+      const fwt = await this.getStoredFwt()
+      await this.reply(`${config.signTitle}开始执行，请稍候...`)
+      const data = await this.runSingleCommunitySign(gameKey, fwt)
+      await this.reply(buildCommunityReply(`${config.signTitle}执行完成`, data))
+      return true
+    } catch (error) {
+      return this.replyFailure(`${config.signTitle}失败`, error)
+    }
+  }
+
+  async executeSingleCommunityQuery (gameKey = '') {
+    const { config } = this.getSingleCommunityApiMethods(gameKey)
+
+    try {
+      const fwt = await this.getStoredFwt()
+      await this.reply(`${config.queryTitle}开始执行，请稍候...`)
+
+      const result = await this.fetchSingleCommunityQueryData(gameKey, fwt)
+      if (result.authError) {
+        throw result.authError
+      }
+
+      if (!result.levelData && !result.tasksData) {
+        throw new Error(result.errors.level || result.errors.tasks || '未获取到社区数据')
+      }
+
+      await this.replyQueryForward(
+        config.queryForwardTitle,
+        buildCommunityQueryMessages(config.name, result.levelData, result.tasksData, result.errors)
+      )
+      return true
+    } catch (error) {
+      return this.replyFailure(`${config.queryTitle}失败`, error)
+    }
+  }
+
+  async fetchAllCommunityQueryResults (fwt = '') {
+    const results = await Promise.all(
+      COMMUNITY_GAME_KEYS.map((gameKey) => this.fetchSingleCommunityQueryData(gameKey, fwt))
+    )
+
+    return {
+      results,
+      resultMap: Object.fromEntries(COMMUNITY_GAME_KEYS.map((gameKey, index) => [gameKey, results[index]])),
+      authError: results.find((item) => item?.authError)?.authError,
+      hasAnyData: results.some((item) => item?.levelData || item?.tasksData)
+    }
+  }
+
+  async fetchSingleCommunityQueryData (gameKey = '', fwt = '') {
+    const { fetchLevel, fetchTasks } = this.getSingleCommunityApiMethods(gameKey)
+    return this.fetchCommunityQueryData({ fetchLevel, fetchTasks, fwt })
+  }
+
+  async fetchCommunityQueryData (options = {}) {
+    const {
+      fetchLevel,
+      fetchTasks,
+      fwt = ''
+    } = options
+
+    const [levelResult, tasksResult] = await Promise.allSettled([
+      fetchLevel({ fwt }),
+      fetchTasks({
+        fwt,
+        gid: DEFAULT_TASK_GID
+      })
+    ])
+
+    const levelError = levelResult.status === 'rejected' ? levelResult.reason : null
+    const tasksError = tasksResult.status === 'rejected' ? tasksResult.reason : null
+
+    return {
+      levelData: levelResult.status === 'fulfilled' ? levelResult.value : null,
+      tasksData: tasksResult.status === 'fulfilled' ? tasksResult.value : null,
+      errors: {
+        level: levelError ? getErrorMessage(levelError) : '',
+        tasks: tasksError ? getErrorMessage(tasksError) : ''
+      },
+      authError: isAuthExpiredError(levelError) ? levelError : (isAuthExpiredError(tasksError) ? tasksError : null)
+    }
+  }
+
+  async runAllCommunitySign (fwt = '') {
+    const payload = buildAllCommunityPayload(fwt)
+    return this.waitForTaskCompletion({
+      submitTask: this.api.communitySignAll.bind(this.api),
+      fetchTask: this.api.communitySignTask.bind(this.api),
+      payload,
+      timeoutMs: this.getTaskWaitTimeoutMs('all', payload),
+      extractResult: extractBatchCommunityTaskResult
+    })
+  }
+
+  async runSingleCommunitySign (gameKey = '', fwt = '') {
+    const { submitTask, fetchTask } = this.getSingleCommunityApiMethods(gameKey)
+    const payload = buildSingleCommunityPayload(fwt)
+
+    return this.waitForTaskCompletion({
+      submitTask,
+      fetchTask,
+      payload,
+      timeoutMs: this.getTaskWaitTimeoutMs('single', payload),
+      extractResult: extractSingleCommunityTaskResult
+    })
+  }
+
+  async waitForTaskCompletion (options = {}) {
+    const {
+      submitTask,
+      fetchTask,
+      payload = {},
+      timeoutMs = this.api.getCommunityTaskTimeoutMs(),
+      extractResult = (data) => data
+    } = options
+
+    const submitData = await submitTask(payload)
+    const taskId = getTaskId(submitData)
+
+    if (!taskId || isTaskFinished(submitData)) {
+      return extractResult(submitData) || submitData
+    }
+
+    const startedAt = Date.now()
+
+    while (Date.now() - startedAt <= timeoutMs) {
+      await sleep(COMMUNITY_TASK_POLL_INTERVAL_MS)
+      const taskData = await fetchTask(taskId, { fwt: payload?.fwt })
+
+      if (isTaskFailed(taskData)) {
+        throw new Error(extractTaskErrorMessage(taskData))
+      }
+
+      if (isTaskFinished(taskData)) {
+        return extractResult(taskData) || taskData
+      }
+    }
+
+    throw new Error(`等待任务完成超时：${taskId}`)
+  }
+
+  getTaskWaitTimeoutMs (type = 'single', payload = {}) {
+    if (type === 'all') {
+      return Math.max(
+        this.api.getCommunityTaskTimeoutMs(),
+        this.api.estimateAllCommunitiesTimeoutMs(payload)
+      )
+    }
+
+    return Math.max(
+      this.api.getCommunityTaskTimeoutMs(),
+      this.api.estimateSingleCommunityTimeoutMs(payload)
+    )
+  }
+
+  getSingleCommunityApiMethods (gameKey = '') {
+    const config = getCommunityConfig(gameKey)
+    if (!config) {
+      throw new Error(`未知社区配置：${gameKey}`)
+    }
+
+    return {
+      config,
+      submitTask: this.api[config.submitTaskMethod].bind(this.api),
+      fetchTask: this.api[config.fetchTaskMethod].bind(this.api),
+      fetchLevel: this.api[config.fetchLevelMethod].bind(this.api),
+      fetchTasks: this.api[config.fetchTasksMethod].bind(this.api)
+    }
+  }
+
+  async replyQueryForward (title = '', messages = []) {
+    const forward = await common.makeForwardMsg(this.e, messages, title)
+    await this.reply(forward)
+  }
+
+  async replyFailure (title = '', error) {
+    if (isAuthExpiredError(error)) {
+      await this.clearCurrentUserSession()
+      await this.reply(buildReloginReply(title, getErrorMessage(error) || AUTH_EXPIRED_MESSAGE))
+      return true
+    }
+
+    await this.reply(`${title}：${getErrorMessage(error)}`)
+    return true
   }
 
   getSessionIdentity () {
@@ -597,282 +875,5 @@ export class TaJiDuoCommunitySign extends plugin {
   async clearCurrentUserSession () {
     const { selfId, userId } = this.getSessionIdentity()
     await clearUserSession(selfId, userId)
-  }
-
-  async replyFailure (title = '', error) {
-    if (isAuthExpiredError(error)) {
-      await this.clearCurrentUserSession()
-      await this.reply(buildReloginReply(title, getErrorMessage(error) || AUTH_EXPIRED_MESSAGE))
-      return true
-    }
-
-    await this.reply(`${title}：${getErrorMessage(error)}`)
-    return true
-  }
-
-  getSingleCommunityApiMethods (gameKey = '') {
-    const config = getCommunityGameConfig(gameKey)
-    if (!config) {
-      throw new Error(`未知社区配置：${gameKey}`)
-    }
-
-    return {
-      config,
-      submitTask: this.api[config.submitTaskMethod].bind(this.api),
-      fetchTask: this.api[config.fetchTaskMethod].bind(this.api),
-      fetchLevel: this.api[config.fetchLevelMethod].bind(this.api),
-      fetchTasks: this.api[config.fetchTasksMethod].bind(this.api)
-    }
-  }
-
-  async executeSingleCommunitySign (gameKey = '') {
-    const { config } = this.getSingleCommunityApiMethods(gameKey)
-
-    try {
-      const fwt = await this.getStoredFwt()
-      await this.reply(`${config.signTitle}开始执行，请稍候...`)
-      const data = await this.runSingleCommunitySign(gameKey, fwt)
-      await this.reply(buildCommunityReply(`${config.signTitle}执行完成`, data))
-      return true
-    } catch (error) {
-      return this.replyFailure(`${config.signTitle}失败`, error)
-    }
-  }
-
-  async signAllCommunities () {
-    try {
-      const fwt = await this.getStoredFwt()
-      await this.reply(`${ALL_COMMUNITY_META.signTitle}开始执行，请稍候...`)
-      const data = await this.runAllCommunitySign(fwt)
-      await this.replyQueryForward(`${ALL_COMMUNITY_META.signTitle}结果`, buildAllCommunitySignMessages(data))
-      return true
-    } catch (error) {
-      return this.replyFailure(`${ALL_COMMUNITY_META.signTitle}失败`, error)
-    }
-  }
-
-  async signHuantaCommunity () {
-    return this.executeSingleCommunitySign('huanta')
-  }
-
-  async signYihuanCommunity () {
-    return this.executeSingleCommunitySign('yihuan')
-  }
-
-  getTaskWaitTimeoutMs (type = 'single', payload = {}) {
-    if (type === 'all') {
-      return Math.max(
-        this.api.getCommunityTaskTimeoutMs(),
-        this.api.estimateAllCommunitiesTimeoutMs(payload)
-      )
-    }
-
-    return Math.max(
-      this.api.getCommunityTaskTimeoutMs(),
-      this.api.estimateSingleCommunityTimeoutMs(payload)
-    )
-  }
-
-  async waitForTaskCompletion (options = {}) {
-    const {
-      submitTask,
-      fetchTask,
-      payload = {},
-      timeoutMs = this.api.getCommunityTaskTimeoutMs(),
-      extractResult = (data) => data
-    } = options
-
-    const submitData = await submitTask(payload)
-    const taskId = getTaskId(submitData)
-
-    if (!taskId || isTaskFinished(submitData)) {
-      return extractResult(submitData) || submitData
-    }
-
-    const startedAt = Date.now()
-
-    while (Date.now() - startedAt <= timeoutMs) {
-      await sleep(COMMUNITY_TASK_POLL_INTERVAL_MS)
-      const statusData = await fetchTask(taskId, { fwt: payload?.fwt })
-
-      if (isTaskFailed(statusData)) {
-        throw new Error(extractTaskErrorMessage(statusData))
-      }
-
-      if (isTaskFinished(statusData)) {
-        return extractResult(statusData) || statusData
-      }
-    }
-
-    throw new Error(`等待任务完成超时：${taskId}`)
-  }
-
-  async runSingleCommunitySign (gameKey = '', fwt = '') {
-    const { submitTask, fetchTask } = this.getSingleCommunityApiMethods(gameKey)
-    const payload = buildSingleCommunityPayload(fwt)
-    return this.waitForTaskCompletion({
-      submitTask,
-      fetchTask,
-      payload,
-      timeoutMs: this.getTaskWaitTimeoutMs('single', payload),
-      extractResult: extractSingleCommunityTaskResult
-    })
-  }
-
-  async runAllCommunitySign (fwt = '') {
-    const payload = buildAllCommunityPayload(fwt)
-    return this.waitForTaskCompletion({
-      submitTask: this.api.communitySignAll.bind(this.api),
-      fetchTask: this.api.communitySignTask.bind(this.api),
-      payload,
-      timeoutMs: this.getTaskWaitTimeoutMs('all', payload),
-      extractResult: extractBatchCommunityTaskResult
-    })
-  }
-
-  async fetchCommunityQueryData (options = {}) {
-    const {
-      fetchLevel,
-      fetchTasks,
-      fwt = ''
-    } = options
-
-    const taskPayload = {
-      fwt,
-      gid: DEFAULT_TASK_GID
-    }
-
-    const [levelResult, tasksResult] = await Promise.allSettled([
-      fetchLevel({ fwt }),
-      fetchTasks(taskPayload)
-    ])
-
-    const levelError = levelResult.status === 'rejected' ? levelResult.reason : null
-    const tasksError = tasksResult.status === 'rejected' ? tasksResult.reason : null
-
-    return {
-      levelData: levelResult.status === 'fulfilled' ? levelResult.value : null,
-      tasksData: tasksResult.status === 'fulfilled' ? tasksResult.value : null,
-      errors: {
-        level: levelError ? getErrorMessage(levelError) : '',
-        tasks: tasksError ? getErrorMessage(tasksError) : ''
-      },
-      authError: isAuthExpiredError(levelError) ? levelError : (isAuthExpiredError(tasksError) ? tasksError : null)
-    }
-  }
-
-  async replyQueryForward (title = '', messages = []) {
-    const forward = await common.makeForwardMsg(this.e, messages, title)
-    await this.reply(forward)
-  }
-
-  async fetchSingleCommunityQueryData (gameKey = '', fwt = '') {
-    const { fetchLevel, fetchTasks } = this.getSingleCommunityApiMethods(gameKey)
-    return this.fetchCommunityQueryData({ fetchLevel, fetchTasks, fwt })
-  }
-
-  async fetchAllCommunityQueryResults (fwt = '') {
-    const results = await Promise.all(
-      COMMUNITY_GAME_KEYS.map((gameKey) => this.fetchSingleCommunityQueryData(gameKey, fwt))
-    )
-
-    return {
-      results,
-      resultMap: Object.fromEntries(COMMUNITY_GAME_KEYS.map((gameKey, index) => [gameKey, results[index]])),
-      authError: results.find((result) => result?.authError)?.authError,
-      hasAnyData: results.some((result) => result?.levelData || result?.tasksData)
-    }
-  }
-
-  async executeSingleCommunityQuery (gameKey = '') {
-    const { config } = this.getSingleCommunityApiMethods(gameKey)
-
-    try {
-      const fwt = await this.getStoredFwt()
-      await this.reply(`${config.queryTitle}开始执行，请稍候...`)
-      const result = await this.fetchSingleCommunityQueryData(gameKey, fwt)
-      if (result.authError) {
-        throw result.authError
-      }
-      if (!result.levelData && !result.tasksData) {
-        throw new Error(result.errors.level || result.errors.tasks || '未获取到社区数据')
-      }
-      await this.replyQueryForward(
-        config.queryForwardTitle,
-        buildCommunityQueryMessages(config.name, result.levelData, result.tasksData, result.errors)
-      )
-      return true
-    } catch (error) {
-      return this.replyFailure(`${config.queryTitle}失败`, error)
-    }
-  }
-
-  async queryHuantaCommunity () {
-    return this.executeSingleCommunityQuery('huanta')
-  }
-
-  async queryYihuanCommunity () {
-    return this.executeSingleCommunityQuery('yihuan')
-  }
-
-  async queryAllCommunities () {
-    try {
-      const fwt = await this.getStoredFwt()
-      await this.reply(`${ALL_COMMUNITY_META.queryTitle}开始执行，请稍候...`)
-      const queryResults = await this.fetchAllCommunityQueryResults(fwt)
-
-      if (queryResults.authError) {
-        throw queryResults.authError
-      }
-
-      if (!queryResults.hasAnyData) {
-        throw new Error(queryResults.results
-          .flatMap((result) => [result?.errors?.level, result?.errors?.tasks])
-          .filter(Boolean)
-          .join(' | ') || '未获取到社区数据')
-      }
-
-      await this.replyQueryForward(
-        ALL_COMMUNITY_META.queryForwardTitle,
-        buildAllCommunityQueryMessages(queryResults.resultMap)
-      )
-      return true
-    } catch (error) {
-      return this.replyFailure(`${ALL_COMMUNITY_META.queryTitle}失败`, error)
-    }
-  }
-
-  async autoDailyCommunitySign () {
-    const sessions = await listUserSessions()
-
-    if (sessions.length === 0) {
-      logger.info('[TaJiDuo-plugin] 每日 00:20 自动社区签到跳过：当前没有已保存账号')
-      return true
-    }
-
-    logger.info(`[TaJiDuo-plugin] 每日 00:20 自动社区签到开始，共 ${sessions.length} 个账号`)
-
-    let successCount = 0
-
-    for (const item of sessions) {
-      const targetText = describeAutoSignTarget(item)
-
-      try {
-        const data = await this.runAllCommunitySign(item.session.fwt)
-        successCount += 1
-        logger.info(`[TaJiDuo-plugin] 自动社区签到成功：${targetText} | ${summarizeResultObject(data) || '执行完成'}`)
-      } catch (error) {
-        if (isAuthExpiredError(error)) {
-          await clearUserSession(item.selfId, item.userId)
-          logger.warn(`[TaJiDuo-plugin] 自动社区签到登录失效，已清理本地会话：${targetText} | ${error.message || error}`)
-          continue
-        }
-
-        logger.error(`[TaJiDuo-plugin] 自动社区签到失败：${targetText} | ${error.message || error}`)
-      }
-    }
-
-    logger.info(`[TaJiDuo-plugin] 每日 00:20 自动社区签到完成：${successCount}/${sessions.length}`)
-    return true
   }
 }

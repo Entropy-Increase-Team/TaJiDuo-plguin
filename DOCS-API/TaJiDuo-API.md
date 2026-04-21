@@ -23,8 +23,9 @@
 - 调用 TaJiDuo API 的上游后端必须在建会话时注入 `X-Platform-Id` 与 `X-Platform-User-Id`
 - 账号列表、切主账号、删除账号都按 `platformId + platformUserId` 隔离
 - 也支持 `X-Framework-Token`
+- 默认启用全局 `apikey` 校验；除 `/health*` 和 `/_internal/api-keygen/*` 外都必须携带有效 API Key
 - 不再兼容把原始 `accessToken / refreshToken / tgdUid / deviceId` 当作业务接口入口
-- 除登录接口和健康检查外，其他接口都必须显式传有效 `fwt`
+- 大多数用户态接口都必须显式传有效 `fwt`
 
 ## 响应格式
 
@@ -60,17 +61,237 @@
 }
 ```
 
+```json
+{
+  "code": 401,
+  "message": "缺少 apiKey"
+}
+```
+
 ## 平台接口
 
 | 接口 | 用途 |
 | --- | --- |
 | `POST /api/v1/login/tajiduo/captcha/send` | 发送短信验证码 |
 | `POST /api/v1/login/tajiduo/captcha/check` | 校验短信验证码 |
+| `GET /_internal/api-keygen/health` | API Key 自举健康检查 |
+| `POST /_internal/api-keygen/generate` | 用控制台秘钥生成 API Key |
+| `POST /_internal/api-keygen/grant-admin` | 用控制台秘钥给已有 API Key 提权为管理员 |
+| `GET /api/v1/games/redeem-codes` | 兑换码列表 |
+| `POST /api/v1/games/redeem-codes` | 新增兑换码，仅管理员 API Key |
 | `POST /api/v1/login/tajiduo/session` | 登录并保存账号，返回 `username`、展示用 `tjdUid`、`fwt`、`platformId`、`platformUserId` |
 | `POST /api/v1/login/tajiduo/refresh` | 刷新已保存账号 |
 | `GET /api/v1/login/tajiduo/accounts` | 查看账号列表 |
 | `POST /api/v1/login/tajiduo/accounts/primary` | 切主账号 |
 | `DELETE /api/v1/login/tajiduo/accounts/:fwt` | 删除账号 |
+
+## API Key
+
+当前服务默认启用 API Key：
+
+1. `/health` 和 `/health/detailed` 默认免鉴权
+2. `/_internal/api-keygen/*` 默认从 API Key 中间件放行，但会在接口内部校验控制台秘钥
+3. 其他接口都需要携带有效 API Key
+4. 默认请求头是 `X-API-Key`
+5. 也支持 `Authorization: Bearer <api-key>`
+6. 动态生成的 API Key 固定格式是 `tjd-` 加 16 位随机大小写字母数字
+7. 动态生成的 API Key 元数据持久化在 PostgreSQL
+8. 生成型 API Key 支持 `is_admin` 管理员标记，并可后续提权
+9. `POST /api/v1/games/redeem-codes` 仅管理员 API Key 可用
+
+示例：
+
+```http
+X-API-Key: your-api-key
+```
+
+控制台秘钥示例：
+
+```http
+X-Console-Key: your-console-key
+```
+
+### `GET /_internal/api-keygen/health`
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "status": "healthy"
+  }
+}
+```
+
+### `POST /_internal/api-keygen/generate`
+
+说明：
+
+- 这个接口不要求 API Key
+- 但必须携带有效控制台秘钥
+- 支持 `X-Console-Key` 或 `Authorization: Bearer <console-key>`
+- 会返回一个可直接用于后续业务调用的 API Key
+
+JSON 请求体：
+
+```json
+{
+  "name": "telegram-bot",
+  "expires_in_hours": 720,
+  "is_admin": true
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "api_key": "tjd-A1b2C3d4E5f6G7h8",
+    "key_prefix": "tjd-",
+    "name": "telegram-bot",
+    "issued_at": "2026-04-21T12:30:00Z",
+    "expires_at": "2026-05-21T12:30:00Z",
+    "is_admin": true,
+    "console_key_mode": "postgres_short_token"
+  }
+}
+```
+
+说明：
+
+- `is_admin` 可选，默认 `false`
+- `is_admin = true` 时会直接生成管理员 API Key
+
+### `POST /_internal/api-keygen/grant-admin`
+
+说明：
+
+- 这个接口不要求 API Key
+- 但必须携带有效控制台秘钥
+- 支持 `X-Console-Key` 或 `Authorization: Bearer <console-key>`
+- 用于把一个已有生成型 API Key 提权成管理员
+
+JSON 请求体：
+
+```json
+{
+  "api_key": "tjd-A1b2C3d4E5f6G7h8"
+}
+```
+
+## 兑换码接口
+
+说明：
+
+- 兑换码接口只要求有效 API Key
+- 不要求 `fwt`
+- `POST /api/v1/games/redeem-codes` 必须使用管理员 API Key
+- `code` 按传入内容原样保存，大小写敏感，`ABC123` 和 `abc123` 视为两个不同兑换码
+
+### `GET /api/v1/games/redeem-codes`
+
+查询参数：
+
+- `gameCode`：可选，例如 `huanta`
+- `includeExpired`：可选，`true` 时返回已过期兑换码
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "gameCode": "huanta",
+        "gameName": "幻塔",
+        "code": "HT2026SPRING",
+        "description": "2026 春季礼包",
+        "exchangeRewards": "墨晶*100, 金核*2",
+        "expiresAt": "2026-05-01T00:00:00Z",
+        "createdAt": "2026-04-21T18:00:00Z",
+        "updatedAt": "2026-04-21T18:00:00Z",
+        "createdByApiKeyName": "admin-bot",
+        "createdBySource": "generated"
+      }
+    ]
+  }
+}
+```
+
+### `POST /api/v1/games/redeem-codes`
+
+说明：
+
+- 仅管理员 API Key 可用
+- 如果当前 API Key 不是管理员，返回 `403 当前 apiKey 无管理员权限`
+
+请求体：
+
+```json
+{
+  "gameCode": "huanta",
+  "code": "HT2026SPRING",
+  "description": "2026 春季礼包",
+  "exchangeRewards": "墨晶*100, 金核*2",
+  "expiresAt": "2026-05-01T00:00:00Z"
+}
+```
+
+说明：
+
+- `gameCode` 必填，当前支持已接入游戏，例如 `huanta`、`yihuan`
+- `code` 必填
+- `description` 可选
+- `exchangeRewards` 可选，表示兑换后可获得的奖励内容
+- `expiresAt` 可选，必须是 RFC3339 时间
+- `code` 大小写敏感，按原样保存
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "id": 1,
+    "gameCode": "huanta",
+    "gameName": "幻塔",
+    "code": "HT2026SPRING",
+    "description": "2026 春季礼包",
+    "exchangeRewards": "墨晶*100, 金核*2",
+    "expiresAt": "2026-05-01T00:00:00Z",
+    "createdAt": "2026-04-21T18:00:00Z",
+    "updatedAt": "2026-04-21T18:00:00Z",
+    "createdByApiKeyName": "admin-bot",
+    "createdBySource": "generated"
+  }
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "name": "telegram-bot",
+    "key_prefix": "tjd-",
+    "issued_at": "2026-04-21T12:30:00Z",
+    "expires_at": "2026-05-21T12:30:00Z",
+    "is_admin": true,
+    "source": "generated"
+  }
+}
+```
 
 ## 登录态来源顺序
 
@@ -108,6 +329,7 @@ X-Platform-User-Id: 123456789
 - 这两个请求头由调用 TaJiDuo API 的上游后端注入
 - 终端客户端不需要自己感知或拼接这两个字段
 - `POST /api/v1/login/tajiduo/session` 缺少任一请求头时会直接返回 `400`
+- 这个登录接口同样需要携带有效 API Key
 
 ### `POST /api/v1/login/tajiduo/captcha/send`
 
@@ -597,6 +819,7 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 ```http
 GET /api/v1/games/community/sign/tasks/3e52d60aa7c0441f8f70852f634c6540?fwt=0d53c6f8f56f4d7abf53dbf4f68e7856
+X-API-Key: your-api-key
 ```
 
 执行中响应示例：

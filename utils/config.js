@@ -7,42 +7,27 @@ const userConfigDir = path.join(pluginRoot, 'config', 'config')
 const userConfigPath = path.join(userConfigDir, 'tajiduo.yaml')
 const defaultConfigPath = path.join(pluginRoot, 'config', 'tajiduo_default.yaml')
 
-if (!fs.existsSync(userConfigDir)) {
-  fs.mkdirSync(userConfigDir, { recursive: true })
-}
-
-if (!fs.existsSync(userConfigPath)) {
+// 确保配置目录和默认配置存在
+fs.mkdirSync(userConfigDir, { recursive: true })
+if (!fs.existsSync(userConfigPath) && fs.existsSync(defaultConfigPath)) {
   try {
-    if (fs.existsSync(defaultConfigPath)) {
-      fs.copyFileSync(defaultConfigPath, userConfigPath)
-    }
-
-    if (fs.existsSync(userConfigPath)) {
-      logger.info('[TaJiDuo-plugin] 已自动创建 tajiduo.yaml')
-    }
+    fs.copyFileSync(defaultConfigPath, userConfigPath)
+    logger.info('[TaJiDuo-plugin] 已自动创建 tajiduo.yaml')
   } catch (error) {
     logger.error('[TaJiDuo-plugin] 自动创建 tajiduo.yaml 失败', error)
   }
 }
 
 class Config {
-  constructor () {
-    this.cache = {
-      config: null,
-      defaultConfig: null
-    }
-
-    this.fileMaps = {
-      config: userConfigPath,
-      defaultConfig: defaultConfigPath
-    }
-
+  constructor() {
+    this.cache = { config: null, defaultConfig: null }
+    this.fileMaps = { config: userConfigPath, defaultConfig: defaultConfigPath }
     this.watchFiles()
   }
 
-  loadYaml (filePath) {
+  loadYaml(filePath) {
+    if (!fs.existsSync(filePath)) return {}
     try {
-      if (!fs.existsSync(filePath)) return {}
       return YAML.parse(fs.readFileSync(filePath, 'utf8')) || {}
     } catch (error) {
       logger.error(`[TaJiDuo-plugin] 读取配置失败：${path.basename(filePath)}`, error)
@@ -50,40 +35,28 @@ class Config {
     }
   }
 
-  watchFiles () {
-    for (const [key, filePath] of Object.entries(this.fileMaps)) {
-      if (!fs.existsSync(filePath)) continue
-      fs.watchFile(filePath, { interval: 1000 }, () => {
-        this.cache[key] = null
-      })
-    }
+  watchFiles() {
+    Object.entries(this.fileMaps).forEach(([key, filePath]) => {
+      if (fs.existsSync(filePath)) {
+        fs.watchFile(filePath, { interval: 1000 }, () => this.cache[key] = null)
+      }
+    })
   }
 
-  getConfig () {
-    if (this.cache.config === null) {
-      this.cache.config = this.loadYaml(this.fileMaps.config)
-    }
-    return this.cache.config
+  getConfig() {
+    return this.cache.config ??= this.loadYaml(this.fileMaps.config)
   }
 
-  getDefaultConfig () {
-    if (this.cache.defaultConfig === null) {
-      this.cache.defaultConfig = this.loadYaml(this.fileMaps.defaultConfig)
-    }
-    return this.cache.defaultConfig
+  getDefaultConfig() {
+    return this.cache.defaultConfig ??= this.loadYaml(this.fileMaps.defaultConfig)
   }
 
-  get (group, key) {
+  get(group, key) {
     const config = this.getConfig()
-    if (config?.[group]?.[key] !== undefined) {
-      return config[group][key]
-    }
-
-    const defaultConfig = this.getDefaultConfig()
-    return defaultConfig?.[group]?.[key]
+    return config?.[group]?.[key] ?? this.getDefaultConfig()?.[group]?.[key]
   }
 
-  setConfig (data) {
+  setConfig(data) {
     try {
       fs.writeFileSync(this.fileMaps.config, YAML.stringify(data), 'utf8')
       this.cache.config = data

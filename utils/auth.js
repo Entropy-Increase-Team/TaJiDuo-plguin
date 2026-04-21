@@ -1,7 +1,7 @@
 import { joinLines } from './common.js'
 import { formatCommand } from './command.js'
 
-const LOGIN_COMMAND_EXAMPLE = formatCommand('塔吉多登录 13800138000')
+const LOGIN_COMMAND_EXAMPLE = formatCommand('登录 13800138000')
 const AUTH_EXPIRED_MESSAGE = '当前 fwt 已失效，请重新登录'
 
 function getErrorMessage (error) {

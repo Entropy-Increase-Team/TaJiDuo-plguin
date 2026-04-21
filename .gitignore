@@ -1,2 +1,3 @@
 config/config/
 .DS_Store
+apps/admin.js

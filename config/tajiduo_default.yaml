@@ -2,6 +2,9 @@ tajiduo:
   # TaJiDuo 后端地址；只填域名也可以，插件会自动补成 https://
   base_url: 'https://tajiduo.shallow.ink'
 
+  # TaJiDuo API Key；会作为 X-API-Key 请求头发送；除健康检查等少数接口外通常必填
+  api_key: ''
+
   # 客户端 ID；会作为 X-Platform-Id 发送，建议使用 bot QQ、应用名或其它 ASCII 标识
   client_id: ''
 
