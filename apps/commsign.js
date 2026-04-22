@@ -16,6 +16,7 @@ import { buildCommandReg } from '../utils/command.js'
 
 const DEFAULT_TASK_GID = 2
 const COMMUNITY_TASK_POLL_INTERVAL_MS = 2000
+const DEFAULT_AUTO_SIGN_CRON = '0 20 0 * * *'
 const ACTIVE_COMMUNITY_TASK_KEYS = new Set([
   'signin_exp',
   'browse_post_exp',
@@ -82,6 +83,61 @@ function toFiniteNumber (value) {
 
 function getConfiguredDelay (key, fallback) {
   return normalizeNonNegativeInt(Config.get('tajiduo', key)) ?? fallback
+}
+
+function normalizeIdList (items = []) {
+  return [...new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+  )]
+}
+
+function normalizeCronExpression (cronExpression = '') {
+  if (!cronExpression || typeof cronExpression !== 'string') {
+    throw new Error('无效的 cron 表达式：输入必须是字符串')
+  }
+
+  const cron = cronExpression.replace(/\?/g, '*')
+  const parts = cron.split(/\s+/).filter(Boolean)
+
+  if (parts.length === 5) {
+    parts.unshift('0')
+  } else if (parts.length === 7) {
+    parts.pop()
+  }
+
+  if (parts.length !== 6) {
+    throw new Error(`无效的 cron 表达式 "${cronExpression}"，无法转换为六位格式`)
+  }
+
+  return parts.join(' ')
+}
+
+function getAutoSignConfig () {
+  const config = isPlainObject(Config.get('tajiduo', 'auto_sign'))
+    ? Config.get('tajiduo', 'auto_sign')
+    : {}
+
+  return {
+    enabled: config?.enabled !== false,
+    cron: String(config?.cron || DEFAULT_AUTO_SIGN_CRON).trim() || DEFAULT_AUTO_SIGN_CRON,
+    notifyList: {
+      friend: normalizeIdList(config?.notify_list?.friend),
+      group: normalizeIdList(config?.notify_list?.group)
+    }
+  }
+}
+
+function getAutoSignTaskCron () {
+  const configuredCron = getAutoSignConfig().cron || DEFAULT_AUTO_SIGN_CRON
+
+  try {
+    return normalizeCronExpression(configuredCron)
+  } catch (error) {
+    logger.error(`[TaJiDuo-plugin] 自动社区签到 cron 表达式无效，已回退默认值: ${error?.message || error}`)
+    return DEFAULT_AUTO_SIGN_CRON
+  }
 }
 
 function buildSingleCommunityPayload (fwt = '') {
@@ -341,6 +397,50 @@ function buildAllCommunitySignMessages (data = {}) {
     .filter(Boolean)
 
   return [summaryMessage, ...detailMessages]
+}
+
+function buildAutoSignStartMessage (count = 0) {
+  return joinLines([
+    '塔吉多每日社区签到开始',
+    `执行账号数：${Math.max(0, Number(count) || 0)}`
+  ])
+}
+
+function buildAutoSignAccountResultLines (entry = {}) {
+  const lines = [describeAutoSignTarget(entry?.item)]
+
+  if (!entry?.success) {
+    lines.push(`结果：${entry?.errorMessage || '执行失败'}`)
+    return lines
+  }
+
+  lines.push(buildResultLine(entry?.data, '执行完成'))
+
+  for (const { title, section } of getNestedCommunitySections(entry?.data)) {
+    lines.push(`${title}：${summarizeResultObject(section) || '执行完成'}`)
+  }
+
+  return lines
+}
+
+function buildAutoSignCompleteMessage (payload = {}) {
+  const total = Math.max(0, Number(payload?.total) || 0)
+  const successCount = Math.max(0, Number(payload?.successCount) || 0)
+  const results = Array.isArray(payload?.results) ? payload.results : []
+  const lines = [
+    '塔吉多每日社区签到完成',
+    `执行账号数：${total}`,
+    `成功：${successCount}`,
+    `失败：${Math.max(total - successCount, 0)}`
+  ]
+
+  if (results.length > 0) {
+    results.forEach((entry, index) => {
+      lines.push('', `${index + 1}. ${buildAutoSignAccountResultLines(entry).join('\n')}`)
+    })
+  }
+
+  return joinLines(lines)
 }
 
 function getTaskRemaining (task = {}) {
@@ -744,7 +844,7 @@ export class CommSign extends plugin {
     this.task = [
       {
         name: '[TaJiDuo-plugin] 每日社区签到',
-        cron: '0 20 0 * * *',
+        cron: getAutoSignTaskCron(),
         fnc: () => this.autoDailyCommunitySign()
       }
     ]
@@ -810,6 +910,12 @@ export class CommSign extends plugin {
   }
 
   async autoDailyCommunitySign () {
+    const autoSign = getAutoSignConfig()
+    if (autoSign.enabled === false) {
+      logger.info('[TaJiDuo-plugin] 每日自动社区签到已关闭，跳过本次执行')
+      return true
+    }
+
     const sessions = await listUserSessions()
     if (sessions.length === 0) {
       logger.info('[TaJiDuo-plugin] 每日 00:20 自动社区签到跳过：当前没有已保存账号')
@@ -817,8 +923,10 @@ export class CommSign extends plugin {
     }
 
     logger.info(`[TaJiDuo-plugin] 每日 00:20 自动社区签到开始，共 ${sessions.length} 个账号`)
+    await this.sendAutoSignNotifyList(buildAutoSignStartMessage(sessions.length), autoSign.notifyList)
 
     let successCount = 0
+    const results = []
 
     for (const item of sessions) {
       const targetText = describeAutoSignTarget(item)
@@ -826,18 +934,37 @@ export class CommSign extends plugin {
       try {
         const data = await this.runAllCommunitySign(item.session.fwt)
         successCount += 1
+        results.push({ item, success: true, data })
         logger.info(`[TaJiDuo-plugin] 自动社区签到成功：${targetText} | ${summarizeResultObject(data) || '执行完成'}`)
       } catch (error) {
         if (isAuthExpiredError(error)) {
           await clearUserSession(item.selfId, item.userId)
+          results.push({
+            item,
+            success: false,
+            errorMessage: `登录失效，已清理本地会话 | ${getErrorMessage(error)}`
+          })
           logger.warn(`[TaJiDuo-plugin] 自动社区签到登录失效，已清理本地会话：${targetText} | ${getErrorMessage(error)}`)
           continue
         }
 
+        results.push({
+          item,
+          success: false,
+          errorMessage: getErrorMessage(error)
+        })
         logger.error(`[TaJiDuo-plugin] 自动社区签到失败：${targetText} | ${getErrorMessage(error)}`)
       }
     }
 
+    await this.sendAutoSignNotifyList(
+      buildAutoSignCompleteMessage({
+        total: sessions.length,
+        successCount,
+        results
+      }),
+      autoSign.notifyList
+    )
     logger.info(`[TaJiDuo-plugin] 每日 00:20 自动社区签到完成：${successCount}/${sessions.length}`)
     return true
   }
@@ -1077,6 +1204,38 @@ export class CommSign extends plugin {
 
     await this.reply(`${title}：${getErrorMessage(error)}`)
     return true
+  }
+
+  async sendAutoSignNotifyList (msg = '', notifyList = {}) {
+    const text = String(msg || '').trim()
+    if (!text) {
+      return
+    }
+
+    const friendIds = normalizeIdList(notifyList?.friend)
+    const groupIds = normalizeIdList(notifyList?.group)
+
+    for (const id of friendIds) {
+      try {
+        if (Bot?.pickUser) {
+          await Bot.pickUser(id).sendMsg(text)
+        } else if (Bot?.sendPrivateMsg) {
+          await Bot.sendPrivateMsg(id, text)
+        }
+      } catch (error) {
+        logger.error(`[TaJiDuo-plugin] 自动社区签到通知好友 ${id} 失败：${error?.message || error}`)
+      }
+    }
+
+    for (const id of groupIds) {
+      try {
+        if (Bot?.pickGroup) {
+          await Bot.pickGroup(id).sendMsg(text)
+        }
+      } catch (error) {
+        logger.error(`[TaJiDuo-plugin] 自动社区签到通知群 ${id} 失败：${error?.message || error}`)
+      }
+    }
   }
 
   getSessionIdentity () {

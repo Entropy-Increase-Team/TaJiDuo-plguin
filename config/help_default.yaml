@@ -8,6 +8,8 @@ help:
       list:
         - title: tjd帮助 / tof帮助 / nte帮助
           desc: 查看插件帮助
+        - title: tjd更新
+          desc: 更新 TaJiDuo 插件，仅主人可用
 
     - title: 登录命令
       list:
@@ -70,3 +72,4 @@ help:
     - tjd兑换码、tof兑换码、nte兑换码 不需要登录即可使用
     - 仍兼容 tjd幻塔社区签到、tjd异环社区签到、tjd幻塔社区查询、tjd异环社区查询
     - 已登录账号会在每天 00:20 自动执行社区签到
+    - 自动签到开始/完成推送可在 tajiduo.yaml 或锅巴中配置好友/群通知列表

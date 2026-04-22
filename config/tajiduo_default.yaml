@@ -25,3 +25,17 @@ tajiduo:
 
   # 一键社区签到时两个社区之间的等待时间，单位毫秒；支持设为 0 关闭等待
   between_communities_ms: 15000
+
+  auto_sign:
+    # 是否开启每日自动社区签到
+    enabled: true
+
+    # 自动社区签到执行时间，支持 5/6/7 位 cron；默认每天 00:20 执行
+    cron: '0 20 0 * * *'
+
+    notify_list:
+      # 自动签到开始/完成时，推送到这些 QQ 私聊
+      friend: []
+
+      # 自动签到开始/完成时，推送到这些群
+      group: []

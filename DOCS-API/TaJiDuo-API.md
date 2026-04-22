@@ -83,10 +83,13 @@
 | `GET /api/v1/games/shop/goods` | 商城商品列表 |
 | `GET /api/v1/games/shop/goods/:goodsId` | 商城商品详情 |
 | `GET /api/v1/games/shop/coin/state` | 塔吉多币状态 |
+| `GET /api/v1/games/shop/coin/records/income` | 塔塔币明细-获取记录 |
+| `GET /api/v1/games/shop/coin/records/consume` | 塔塔币明细-消耗记录 |
 | `GET /api/v1/games/shop/game-roles` | 指定游戏角色列表 |
 | `POST /api/v1/games/shop/exchange` | 商城商品兑换 |
 | `POST /api/v1/login/tajiduo/session` | 登录并保存账号，返回 `username`、展示用 `tjdUid`、`fwt`、`platformId`、`platformUserId` |
 | `POST /api/v1/login/tajiduo/refresh` | 刷新已保存账号 |
+| `GET /api/v1/login/tajiduo/profile` | 查询当前 tjd 账号个人资料 |
 | `GET /api/v1/login/tajiduo/accounts` | 查看账号列表 |
 | `POST /api/v1/login/tajiduo/accounts/primary` | 切主账号 |
 | `DELETE /api/v1/login/tajiduo/accounts/:fwt` | 删除账号 |
@@ -451,6 +454,7 @@ X-Platform-User-Id: 123456789
 
 - `username` 来自用户中心资料里的昵称
 - `tjdUid` 来自资料页展示账号，仅作展示
+- 当前 `tjd` 账号的个人资料请通过 `GET /api/v1/login/tajiduo/profile` 查询
 - 数据库存的仍然是社区真实 `tgdUid`
 - `X-Platform-Id + X-Platform-User-Id` 由上游后端注入，不由终端客户端直接传 JSON
 - `platformId + platformUserId` 用于隔离第三方平台自己的账号归属
@@ -506,6 +510,38 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 - 刷新后的原始 token 只更新数据库，不作为顶层返回字段下发给客户端
 - `upstream.data` 是上游原始刷新结果，仅用于排查
 - 后端还会按配置做定时刷新
+
+### `GET /api/v1/login/tajiduo/profile`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+说明：
+
+- 必须显式传 `fwt`
+- 如果 `fwt` 无效、已删除或已失效，返回 `401 当前 fwt 已失效，请重新登录`
+- 这是当前 `fwt` 对应的 `tjd` 账号个人资料
+- 顶层只返回 `uid`、`nickname`、`avatar`、`introduce`
+- 不对外返回 `account`、`ipRegion`
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "uid": 10193432,
+    "nickname": "jvrAsdSD9",
+    "avatar": "https://serverlist-yh.wmupd.com/notice_test5/pic/icon_t1.png",
+    "introduce": "平平无奇"
+  }
+}
+```
 
 ### `GET /api/v1/login/tajiduo/accounts`
 
@@ -785,6 +821,130 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
   }
 }
 ```
+
+### `GET /api/v1/games/shop/coin/records/income`
+
+查询参数：
+
+- `size`：可选，默认 `20`
+- `version`：可选，分页游标，首页传 `0` 或留空
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+请求示例：
+
+```http
+GET /api/v1/games/shop/coin/records/income?size=20&version=0
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "action": 1,
+    "actionName": "获取记录",
+    "items": [
+      {
+        "action": 1,
+        "createTime": 1776811672706,
+        "id": 5447394,
+        "num": 50,
+        "sourceId": "11953421",
+        "title": "首次兑换",
+        "type": 2,
+        "typeName": "塔吉多任务",
+        "uid": 10193432,
+        "updateTime": 1776811672715
+      }
+    ],
+    "more": true,
+    "version": 1776721725332,
+    "upstream": {
+      "success": true,
+      "httpStatus": 200,
+      "code": 0,
+      "message": "ok"
+    }
+  }
+}
+```
+
+说明：
+
+- 这是塔塔币获取流水接口
+- 对应上游 `getUserCoinRecords?action=1`
+- `version` 是下一页游标
+- `more=true` 表示还有更多数据
+
+### `GET /api/v1/games/shop/coin/records/consume`
+
+查询参数：
+
+- `size`：可选，默认 `20`
+- `version`：可选，分页游标，首页传 `0` 或留空
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+请求示例：
+
+```http
+GET /api/v1/games/shop/coin/records/consume?size=20&version=0
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "action": 2,
+    "actionName": "消耗记录",
+    "items": [
+      {
+        "action": 2,
+        "createTime": 1776812672706,
+        "id": 5447395,
+        "num": 300,
+        "sourceId": "10",
+        "title": "金币*1000",
+        "type": 1,
+        "typeName": "商城兑换",
+        "uid": 10193432,
+        "updateTime": 1776812672715
+      }
+    ],
+    "more": false,
+    "version": 1776555801278,
+    "upstream": {
+      "success": true,
+      "httpStatus": 200,
+      "code": 0,
+      "message": "ok"
+    }
+  }
+}
+```
+
+说明：
+
+- 这是塔塔币消耗流水接口
+- 对应上游 `getUserCoinRecords?action=2`
+- `title` 通常会展示消耗来源，例如商城兑换商品
+- `version` 是下一页游标
 
 ### `GET /api/v1/games/shop/game-roles`
 

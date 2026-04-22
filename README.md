@@ -30,6 +30,8 @@ api_key: 'tjd-8FtI7adTkMHMjZaE'
 - 商品兑换
 - 兑换码查询
 - 每天 `00:20` 自动社区签到
+- 自动签到结果推送到群聊 / 好友
+- `tjd更新` 插件更新命令
 
 ## 安装方式
 
@@ -64,6 +66,12 @@ tajiduo:
   action_delay_ms: 3000
   step_delay_ms: 8000
   between_communities_ms: 15000
+  auto_sign:
+    enabled: true
+    cron: '0 20 0 * * *'
+    notify_list:
+      friend: []
+      group: []
 ```
 
 字段说明：
@@ -77,6 +85,10 @@ tajiduo:
 - `action_delay_ms`: 单步动作间隔
 - `step_delay_ms`: 步骤间隔
 - `between_communities_ms`: 一键社区签到时两个社区之间的间隔
+- `auto_sign.enabled`: 是否开启每日自动社区签到
+- `auto_sign.cron`: 自动社区签到 cron
+- `auto_sign.notify_list.friend`: 自动签到开始/完成时推送到这些 QQ 私聊
+- `auto_sign.notify_list.group`: 自动签到开始/完成时推送到这些群
 
 说明：
 
@@ -109,6 +121,7 @@ tajiduo:
 | 命令 | 说明 |
 | --- | --- |
 | `tjd帮助 / tof帮助 / nte帮助` | 查看帮助 |
+| `tjd更新` | 更新插件，仅主人可用 |
 
 ### 登录命令
 
@@ -162,12 +175,28 @@ tajiduo:
 
 ## 自动社区签到
 
-插件会在每天 `00:20` 自动遍历 Redis 中已保存的账号，并执行一键社区签到：
+插件会按 `tajiduo.auto_sign.cron` 定时遍历 Redis 中已保存的账号，并执行一键社区签到：
 
 - `POST /api/v1/games/community/sign/all`
 - `GET /api/v1/games/community/sign/tasks/:taskId`
 
 如果当前没有已保存账号，自动任务会直接跳过，并在日志中输出提示。
+
+如果配置了通知列表，自动签到开始和完成时会推送到对应好友 / 群：
+
+```yaml
+tajiduo:
+  auto_sign:
+    enabled: true
+    cron: '0 20 0 * * *'
+    notify_list:
+      friend:
+        - '123456789'
+      group:
+        - '987654321'
+```
+
+也可以通过 `guoba.support.js` 在锅巴面板中直接配置这些项目。
 
 ## 反馈
 
