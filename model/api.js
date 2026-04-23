@@ -590,6 +590,34 @@ export default class TaJiDuoApi {
     })
   }
 
+  yihuanRoles (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/yihuan/roles', {
+      method: 'get',
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanSignState (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/yihuan/sign/state', {
+      method: 'get',
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanSignGame (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/yihuan/sign/game', {
+      method: 'post',
+      data: omitFrameworkToken(payload),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
   yihuanSignApp (payload = {}) {
     const fwt = getFrameworkToken(payload)
 

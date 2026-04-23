@@ -15,7 +15,7 @@
 - 参考主游戏 `gameId = 1289`
 - `communityId = 2`
 - 路由前缀：`/api/v1/games/yihuan`
-- 当前只开放社区层能力
+- 当前已开放游戏签到、补签、角色列表与社区层能力
 
 ## 响应格式
 
@@ -66,6 +66,12 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 | 接口 | 用途 | 说明 |
 | --- | --- | --- |
+| `GET /api/v1/games/yihuan/roles` | 拉取角色列表 | 返回异环角色列表 |
+| `GET /api/v1/games/yihuan/sign/state` | 游戏签到状态 | 查询今日是否已签 |
+| `GET /api/v1/games/yihuan/sign/rewards` | 游戏签到奖励表 | 支持可选 `roleId` |
+| `GET /api/v1/games/yihuan/sign/resign-info` | 游戏补签信息 | 查询补签次数、消耗与余额 |
+| `POST /api/v1/games/yihuan/sign/game` | 单角色游戏签到 | 需要 `roleId` |
+| `POST /api/v1/games/yihuan/sign/resign` | 单角色游戏补签 | 需要 `roleId` |
 | `POST /api/v1/games/yihuan/sign/app` | 社区签到单步 | 只做签到 |
 | `POST /api/v1/games/yihuan/community/sign/all` | 提交社区 5 步任务 | 不做游戏签到 |
 | `GET /api/v1/games/yihuan/community/sign/tasks/:taskId` | 查询社区任务状态 | 返回异步执行结果 |
@@ -75,6 +81,229 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 | `GET /api/v1/games/yihuan/community/exp/records` | 社区经验流水 | 查询经验记录 |
 
 ## 核心接口
+
+### `GET /api/v1/games/yihuan/roles`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1289",
+    "bindRole": 0,
+    "roles": [
+      {
+        "gameId": 1289,
+        "gender": 0,
+        "lev": 1,
+        "roleId": 214075351008,
+        "roleName": "9_130707909",
+        "serverId": 14001,
+        "serverName": "OB游戏服"
+      }
+    ]
+  }
+}
+```
+
+说明：
+
+- 当前实现直接读取异环角色列表
+- `roleId` 可直接用于 `sign/game` 与 `sign/resign`
+
+### `GET /api/v1/games/yihuan/sign/state`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1289",
+    "day": 23,
+    "days": 0,
+    "month": 4,
+    "reSignCnt": 0,
+    "todaySign": false
+  }
+}
+```
+
+说明：
+
+- `todaySign` 表示今天是否已签到
+- `days` 表示当前累计签到天数
+- `reSignCnt` 表示当前补签次数
+
+### `GET /api/v1/games/yihuan/sign/rewards`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+查询参数：
+
+- `roleId`：可选
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1289",
+    "roleId": "214075351008",
+    "items": [
+      {
+        "name": "甲硬币",
+        "num": 10000
+      }
+    ]
+  }
+}
+```
+
+说明：
+
+- 这次接口按抓包支持带 `roleId`
+- 不传 `roleId` 也可以正常返回奖励表
+
+### `GET /api/v1/games/yihuan/sign/resign-info`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1289",
+    "coin": 390,
+    "cost": 200,
+    "reSignCnt": 0,
+    "reSignLimit": 3,
+    "todaySign": true
+  }
+}
+```
+
+说明：
+
+- `coin` 是当前补签币余额
+- `cost` 是本次补签消耗
+- `reSignCnt` 是当前已补签次数
+- `reSignLimit` 是补签上限
+
+### `POST /api/v1/games/yihuan/sign/game`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+请求：
+
+```json
+{
+  "roleId": "214075351008"
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "异环游戏签到成功",
+  "data": {
+    "gameId": "1289",
+    "roleId": "214075351008",
+    "upstream": {
+      "success": true,
+      "httpStatus": 200,
+      "code": 0,
+      "message": "ok"
+    }
+  }
+}
+```
+
+说明：
+
+- 当前是单角色直接签到
+- 需要显式传 `roleId`
+
+### `POST /api/v1/games/yihuan/sign/resign`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+请求：
+
+```json
+{
+  "roleId": "214075351008"
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "异环游戏补签成功",
+  "data": {
+    "gameId": "1289",
+    "roleId": "214075351008",
+    "upstream": {
+      "success": true,
+      "httpStatus": 200,
+      "code": 0,
+      "message": "ok"
+    }
+  }
+}
+```
+
+说明：
+
+- 当前是单角色直接补签
+- 需要显式传 `roleId`
+- 补签前建议先查 `sign/resign-info`
 
 ### `POST /api/v1/games/yihuan/sign/app`
 
@@ -524,8 +753,6 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 ## 当前边界
 
-- 当前没有 `POST /api/v1/games/yihuan/roles`
-- 当前没有 `POST /api/v1/games/yihuan/sign/game`
 - 当前没有 `POST /api/v1/games/yihuan/sign/all`
 - `community/sign/all` 当前只会主动执行 5 个任务，不会主动补 `被点赞帖子`、`被回复`、`被收藏`
 - 不要把 HAR 里出现的 `1257` 当成异环主游戏 ID
