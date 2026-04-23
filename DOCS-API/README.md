@@ -17,7 +17,7 @@
 - [Huanta-API.md](./Huanta-API.md)
   幻塔模块，包含游戏签到与社区任务。
 - [YiHuan-API.md](./YiHuan-API.md)
-  异环模块，当前只开放社区任务。
+  异环模块，现已开放游戏签到、补签、角色列表与社区任务。
 - [HAR-API-Inventory.md](./HAR-API-Inventory.md)
   HAR 抓包接口盘点。
 
@@ -38,12 +38,15 @@
 | `GET /api/v1/games/shop/goods` | 商城商品列表 |
 | `GET /api/v1/games/shop/goods/:goodsId` | 商城商品详情 |
 | `GET /api/v1/games/shop/coin/state` | 塔吉多币状态 |
+| `GET /api/v1/games/shop/coin/records/income` | 塔塔币明细-获取记录 |
+| `GET /api/v1/games/shop/coin/records/consume` | 塔塔币明细-消耗记录 |
 | `GET /api/v1/games/shop/game-roles` | 指定游戏角色列表 |
 | `POST /api/v1/games/shop/exchange` | 商城商品兑换 |
 | `POST /api/v1/login/tajiduo/captcha/send` | 发送短信验证码 |
 | `POST /api/v1/login/tajiduo/captcha/check` | 校验短信验证码 |
 | `POST /api/v1/login/tajiduo/session` | 登录并落库，返回 `username`、`tjdUid`、`fwt`、`platformId`、`platformUserId` |
 | `POST /api/v1/login/tajiduo/refresh` | 用已保存账号刷新登录态 |
+| `GET /api/v1/login/tajiduo/profile` | 当前 tjd 账号个人资料 |
 | `GET /api/v1/login/tajiduo/accounts` | 账号列表 |
 | `POST /api/v1/login/tajiduo/accounts/primary` | 切换主账号 |
 | `DELETE /api/v1/login/tajiduo/accounts/:fwt` | 退出登录 / 删除账号 |
@@ -55,7 +58,11 @@
 | 接口 | 用途 |
 | --- | --- |
 | `GET /api/v1/games/huanta/roles` | 拉取角色列表 |
+| `GET /api/v1/games/huanta/sign/state` | 游戏签到状态 |
+| `GET /api/v1/games/huanta/sign/rewards` | 游戏签到奖励表 |
+| `GET /api/v1/games/huanta/sign/resign-info` | 游戏补签信息 |
 | `POST /api/v1/games/huanta/sign/game` | 单角色游戏签到 |
+| `POST /api/v1/games/huanta/sign/resign` | 单角色游戏补签 |
 | `POST /api/v1/games/huanta/sign/all` | 幻塔聚合签到 |
 | `POST /api/v1/games/huanta/sign/app` | 社区签到单步 |
 | `POST /api/v1/games/huanta/community/sign/all` | 提交幻塔社区 5 步任务 |
@@ -69,6 +76,12 @@
 
 | 接口 | 用途 |
 | --- | --- |
+| `GET /api/v1/games/yihuan/roles` | 拉取角色列表 |
+| `GET /api/v1/games/yihuan/sign/state` | 游戏签到状态 |
+| `GET /api/v1/games/yihuan/sign/rewards` | 游戏签到奖励表 |
+| `GET /api/v1/games/yihuan/sign/resign-info` | 游戏补签信息 |
+| `POST /api/v1/games/yihuan/sign/game` | 单角色游戏签到 |
+| `POST /api/v1/games/yihuan/sign/resign` | 单角色游戏补签 |
 | `POST /api/v1/games/yihuan/sign/app` | 社区签到单步 |
 | `POST /api/v1/games/yihuan/community/sign/all` | 提交异环社区 5 步任务 |
 | `GET /api/v1/games/yihuan/community/sign/tasks/:taskId` | 查询异环社区任务状态 |

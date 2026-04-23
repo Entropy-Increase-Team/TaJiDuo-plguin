@@ -72,19 +72,19 @@ function buildRoleLabel (role = {}, index = 0) {
 
 function buildRoleSelectionReply (rolesData = {}, query = '') {
   const roles = normalizeRoleList(rolesData)
-  const commandPrefix = formatCommand('签到', 'yihuan')
+  const commandPrefix = formatCommand('签到', 'huanta')
 
   if (roles.length === 0) {
     return joinLines([
-      '当前账号下未查询到异环角色',
-      '请确认该塔吉多账号已绑定异环角色后再试'
+      '当前账号下未查询到幻塔角色',
+      '请确认该塔吉多账号已绑定幻塔角色后再试'
     ])
   }
 
   const lines = [
     query
-      ? `未找到匹配的异环角色：${query}`
-      : '当前账号下存在多个异环角色，请指定要签到的角色'
+      ? `未找到匹配的幻塔角色：${query}`
+      : '当前账号下存在多个幻塔角色，请指定要签到的角色'
   ]
 
   roles.forEach((role, index) => {
@@ -168,24 +168,25 @@ function normalizeUpstreamMessage (value = '') {
 
 function buildAlreadySignedReply (state = {}, role = null, selectionSource = '', fallbackMessage = '') {
   return joinLines([
-    '塔吉多异环签到',
+    '塔吉多幻塔签到',
     ...(role ? buildRoleDetailLines(role, selectionSource) : []),
     ...buildStateLines(state),
     `结果：${pickFirstNonEmpty(fallbackMessage, '今天已经签到过了')}`
   ])
 }
 
-function buildYihuanSignReply (role = {}, selectionSource = '', data = {}, state = {}) {
+function buildHuantaSignReply (role = {}, selectionSource = '', data = {}, state = {}) {
   const upstream = isPlainObject(data?.upstream) ? data.upstream : {}
-  const success = upstream?.success !== false
+  const success = data?.success !== false && upstream?.success !== false
   const resultMessage = pickFirstNonEmpty(
-    data?.message,
+    normalizeUpstreamMessage(data?.reward),
+    normalizeUpstreamMessage(data?.message),
     normalizeUpstreamMessage(upstream?.message),
     success ? '签到成功' : '签到失败'
   )
 
   return joinLines([
-    '塔吉多异环签到完成',
+    '塔吉多幻塔签到完成',
     ...buildRoleDetailLines(role, selectionSource),
     ...buildStateLines(state),
     `结果：${success ? '成功' : '失败'}${resultMessage ? ` | ${resultMessage}` : ''}`
@@ -276,11 +277,11 @@ function resolveRoleSelection (rolesData = {}, query = '') {
   }
 }
 
-function parseYihuanSignArgs (message = '') {
+function parseHuantaSignArgs (message = '') {
   const text = String(message || '').trim()
   const patterns = [
-    /^#?(?:异环|[Nn][Tt][Ee]|[Yy][Hh])\s*(?:签到|游戏签到)\s*(.*)$/u,
-    /^#?(?:塔吉多|[Tt][Jj][Dd])\s*(?:异环签到|异环游戏签到)\s*(.*)$/u
+    /^#?(?:幻塔|[Tt][Oo][Ff]|[Hh][Tt])\s*(?:签到|游戏签到)\s*(.*)$/u,
+    /^#?(?:塔吉多|[Tt][Jj][Dd])\s*(?:幻塔签到|幻塔游戏签到)\s*(.*)$/u
   ]
 
   for (const pattern of patterns) {
@@ -297,35 +298,35 @@ function isAlreadySignedError (error) {
   return /已签|签到过/.test(getErrorMessage(error))
 }
 
-export class YihuanSign extends plugin {
+export class HuantaSign extends plugin {
   constructor () {
     super({
-      name: '[TaJiDuo-plugin] 异环签到',
-      dsc: 'TaJiDuo 异环游戏签到',
+      name: '[TaJiDuo-plugin] 幻塔签到',
+      dsc: 'TaJiDuo 幻塔游戏签到',
       event: 'message',
       priority: 96,
       rule: [
-        { reg: buildCommandReg('(?:异环签到|异环游戏签到)(?:\\s+.*)?'), fnc: 'signYihuanGame' },
-        { reg: buildCommandReg('(?:签到|游戏签到)(?:\\s+.*)?', 'yihuan'), fnc: 'signYihuanGame' }
+        { reg: buildCommandReg('(?:幻塔签到|幻塔游戏签到)(?:\\s+.*)?'), fnc: 'signHuantaGame' },
+        { reg: buildCommandReg('(?:签到|游戏签到)(?:\\s+.*)?', 'huanta'), fnc: 'signHuantaGame' }
       ]
     })
 
     this.api = new TaJiDuoApi()
   }
 
-  async signYihuanGame () {
-    const roleQuery = parseYihuanSignArgs(this.e.msg)
+  async signHuantaGame () {
+    const roleQuery = parseHuantaSignArgs(this.e.msg)
 
     try {
       const fwt = await this.getStoredFwt()
-      const stateBefore = await this.getYihuanSignState(fwt, { silent: true })
+      const stateBefore = await this.getHuantaSignState(fwt, { silent: true })
 
       if (stateBefore?.todaySign === true) {
         await this.reply(buildAlreadySignedReply(stateBefore))
         return true
       }
 
-      const rolesData = await this.api.yihuanRoles({ fwt })
+      const rolesData = await this.api.huantaRoles({ fwt })
       const selection = resolveRoleSelection(rolesData, roleQuery)
 
       if (!selection?.role?.roleId) {
@@ -334,13 +335,13 @@ export class YihuanSign extends plugin {
       }
 
       await this.reply(joinLines([
-        '塔吉多异环签到中，请稍候...',
+        '塔吉多幻塔签到中，请稍候...',
         ...buildRoleDetailLines(selection.role, selection.selectionSource)
       ]))
 
       let signData
       try {
-        signData = await this.api.yihuanSignGame({
+        signData = await this.api.huantaSignGame({
           fwt,
           roleId: String(selection.role.roleId)
         })
@@ -361,26 +362,26 @@ export class YihuanSign extends plugin {
         throw error
       }
 
-      const stateAfter = await this.getYihuanSignState(fwt, { silent: true })
-      await this.reply(buildYihuanSignReply(
+      const stateAfter = await this.getHuantaSignState(fwt, { silent: true })
+      await this.reply(buildHuantaSignReply(
         selection.role,
         selection.selectionSource,
         signData,
         stateAfter || stateBefore || {}
       ))
     } catch (error) {
-      return this.replyFailure('塔吉多异环签到失败', error)
+      return this.replyFailure('塔吉多幻塔签到失败', error)
     }
 
     return true
   }
 
-  async getYihuanSignState (fwt = '', options = {}) {
+  async getHuantaSignState (fwt = '', options = {}) {
     try {
-      return await this.api.yihuanSignState({ fwt })
+      return await this.api.huantaSignState({ fwt })
     } catch (error) {
       if (options?.silent && !isAuthExpiredError(error)) {
-        logger.warn(`[TaJiDuo-plugin] 异环签到状态查询失败，已忽略：${getErrorMessage(error)}`)
+        logger.warn(`[TaJiDuo-plugin] 幻塔签到状态查询失败，已忽略：${getErrorMessage(error)}`)
         return null
       }
 

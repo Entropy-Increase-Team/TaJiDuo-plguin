@@ -5,11 +5,11 @@ const PREFIX_GROUPS = Object.freeze({
   },
   huanta: {
     display: 'tof',
-    pattern: '#?[Tt][Oo][Ff]'
+    pattern: '#?(?:幻塔|[Tt][Oo][Ff]|[Hh][Tt])'
   },
   yihuan: {
     display: 'nte',
-    pattern: '#?[Nn][Tt][Ee]'
+    pattern: '#?(?:异环|[Nn][Tt][Ee]|[Yy][Hh])'
   }
 })
 

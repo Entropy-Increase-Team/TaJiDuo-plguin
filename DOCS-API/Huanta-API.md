@@ -66,7 +66,11 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 | 接口 | 用途 | 说明 |
 | --- | --- | --- |
 | `GET /api/v1/games/huanta/roles` | 拉取角色列表 | 读绑定角色 + 角色列表 |
+| `GET /api/v1/games/huanta/sign/state` | 游戏签到状态 | 查询今日是否已签 |
+| `GET /api/v1/games/huanta/sign/rewards` | 游戏签到奖励表 | 支持可选 `roleId` |
+| `GET /api/v1/games/huanta/sign/resign-info` | 游戏补签信息 | 查询补签次数、消耗与余额 |
 | `POST /api/v1/games/huanta/sign/game` | 单角色游戏签到 | 只处理一个 `roleId` |
+| `POST /api/v1/games/huanta/sign/resign` | 单角色游戏补签 | 需要 `roleId` |
 | `POST /api/v1/games/huanta/sign/all` | 幻塔聚合签到 | 社区签到 + 游戏签到 |
 | `POST /api/v1/games/huanta/sign/app` | 社区签到单步 | 只做社区签到 |
 | `POST /api/v1/games/huanta/community/sign/all` | 提交社区 5 步任务 | 不做游戏签到 |
@@ -139,6 +143,123 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 }
 ```
 
+### `GET /api/v1/games/huanta/sign/state`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+作用：
+
+- 查询幻塔游戏签到状态
+- 判断今天是否已完成游戏签到
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1256",
+    "day": 23,
+    "days": 0,
+    "month": 4,
+    "reSignCnt": 0,
+    "todaySign": false
+  }
+}
+```
+
+说明：
+
+- `todaySign` 表示今天是否已签到
+- `days` 表示当前累计签到天数
+- `reSignCnt` 表示当前补签次数
+
+### `GET /api/v1/games/huanta/sign/rewards`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+查询参数：
+
+- `roleId`：可选
+
+作用：
+
+- 查询幻塔游戏签到奖励表
+- 抓包里该接口支持附带 `roleId`
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1256",
+    "roleId": "20001",
+    "items": [
+      {
+        "name": "墨晶",
+        "num": 50
+      }
+    ]
+  }
+}
+```
+
+说明：
+
+- 不传 `roleId` 也可以返回奖励表
+- 响应中会保留上游归一化结果到 `upstream`
+
+### `GET /api/v1/games/huanta/sign/resign-info`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+作用：
+
+- 查询幻塔游戏补签信息
+- 用于判断补签次数、补签消耗与补签币余额
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "gameId": "1256",
+    "coin": 390,
+    "cost": 200,
+    "reSignCnt": 0,
+    "reSignLimit": 3,
+    "todaySign": true
+  }
+}
+```
+
+说明：
+
+- `coin` 是当前补签币余额
+- `cost` 是本次补签消耗
+- `reSignCnt` 是当前已补签次数
+- `reSignLimit` 是补签上限
+
 ### `POST /api/v1/games/huanta/sign/game`
 
 请求头：
@@ -185,6 +306,53 @@ X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
 
 - 这个接口直接返回单次游戏签到的上游归一化结果
 - 与 `sign/all` 不同，它不会额外整理成角色级摘要
+
+### `POST /api/v1/games/huanta/sign/resign`
+
+请求头：
+
+```http
+X-API-Key: your-api-key
+X-Framework-Token: 0d53c6f8f56f4d7abf53dbf4f68e7856
+```
+
+请求：
+
+```json
+{
+  "roleId": "20001"
+}
+```
+
+作用：
+
+- 只执行单个角色的游戏补签
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "幻塔游戏补签成功",
+  "data": {
+    "gameId": "1256",
+    "roleId": "20001",
+    "upstream": {
+      "success": true,
+      "httpStatus": 200,
+      "code": 0,
+      "message": "ok"
+    }
+  }
+}
+```
+
+说明：
+
+- 必须显式传 `fwt`
+- 当前 `fwt` 无效、已删除或已失效时返回 `401`
+- `roleId` 仍然必须显式传
+- 补签前建议先查 `sign/resign-info`
 
 ### `POST /api/v1/games/huanta/sign/all`
 

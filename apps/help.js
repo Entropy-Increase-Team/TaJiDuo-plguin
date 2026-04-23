@@ -16,12 +16,12 @@ const FALLBACK_HELP_CONFIG = Object.freeze({
       {
         title: '帮助命令',
         list: [
-          { title: 'tjd帮助 / tof帮助 / nte帮助', desc: '查看插件帮助' }
+          { title: 'tjd帮助 / tof帮助 / ht帮助 / nte帮助 / yh帮助', desc: '查看插件帮助' }
         ]
       }
     ],
     notes: [
-      '命令前缀支持：tjd / tof / nte'
+      '命令前缀支持：tjd / tof / ht / 幻塔 / nte / yh / 异环'
     ]
   }
 })

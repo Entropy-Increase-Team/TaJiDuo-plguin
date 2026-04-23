@@ -6,7 +6,7 @@ help:
   groups:
     - title: 帮助命令
       list:
-        - title: tjd帮助 / tof帮助 / nte帮助
+        - title: tjd帮助 / tof帮助 / ht帮助 / nte帮助 / yh帮助
           desc: 查看插件帮助
         - title: tjd更新
           desc: 更新 TaJiDuo 插件，仅主人可用
@@ -24,9 +24,11 @@ help:
         - title: tjd删除账号
           desc: 删除当前登录账号
 
-    - title: 异环游戏命令
+    - title: 游戏签到命令
       list:
-        - title: nte签到
+        - title: ht签到
+          desc: 执行幻塔游戏签到，默认优先使用绑定角色，支持 角色ID / 序号 / 角色名
+        - title: yh签到
           desc: 执行异环游戏签到，默认优先使用绑定角色，支持 角色ID / 序号 / 角色名
 
     - title: 社区命令
@@ -35,13 +37,13 @@ help:
           desc: 提交幻塔 + 异环社区签到任务并展示结果
         - title: tjd社区查询
           desc: 查询幻塔 + 异环社区状态与任务进度
-        - title: tof社区签到
+        - title: ht社区签到
           desc: 提交幻塔社区签到任务并等待结果
-        - title: tof社区查询
+        - title: ht社区查询
           desc: 查询幻塔社区状态与任务进度
-        - title: nte社区签到
+        - title: yh社区签到
           desc: 提交异环社区签到任务并等待结果
-        - title: nte社区查询
+        - title: yh社区查询
           desc: 查询异环社区状态与任务进度
 
     - title: 商城命令
@@ -61,21 +63,22 @@ help:
       list:
         - title: tjd兑换码
           desc: 查看当前全部可用兑换码
-        - title: tof兑换码
+        - title: ht兑换码
           desc: 查看幻塔当前可用兑换码
-        - title: nte兑换码
+        - title: yh兑换码
           desc: 查看异环当前可用兑换码
 
   notes:
-    - 命令前缀支持：tjd / tof / nte
-    - 帮助命令支持：tjd帮助 / tof帮助 / nte帮助
-    - 总命令使用 tjd；幻塔快捷命令使用 tof；异环快捷命令使用 nte
+    - 命令前缀支持：tjd / tof / ht / 幻塔 / nte / yh / 异环
+    - 帮助命令支持：tjd帮助 / tof帮助 / ht帮助 / nte帮助 / yh帮助
+    - 总命令使用 tjd；幻塔快捷命令使用 tof / ht / 幻塔；异环快捷命令使用 nte / yh / 异环
     - 只有 tjd登录 <手机号> 和后续 6 位验证码需要私聊发送
     - tjd账号、tjd刷新登录、tjd退出登录、tjd删除账号 支持群聊触发
     - tjd商城、tjd商品、tjd塔币查询、tjd商城角色列表、tjd兑换商品 需要先登录
     - 商城相关命令发送后，如存在多个账号，会提示回复序号选择账号
-    - nte签到 默认优先使用绑定角色；多角色时支持 nte签到 1 / nte签到 <roleId> / nte签到 <角色名>
-    - tjd兑换码、tof兑换码、nte兑换码 不需要登录即可使用
-    - 仍兼容 tjd幻塔社区签到、tjd异环社区签到、tjd幻塔社区查询、tjd异环社区查询
+    - tof签到 / ht签到 默认优先使用绑定角色；多角色时支持 ht签到 1 / ht签到 <roleId> / ht签到 <角色名>
+    - nte签到 / yh签到 默认优先使用绑定角色；多角色时支持 yh签到 1 / yh签到 <roleId> / yh签到 <角色名>
+    - tjd兑换码、tof兑换码、ht兑换码、nte兑换码、yh兑换码 不需要登录即可使用
+    - 仍兼容 tjd幻塔签到、tjd异环签到、tjd幻塔社区签到、tjd异环社区签到、tjd幻塔社区查询、tjd异环社区查询
     - 已登录账号会在每天 00:20 自动执行社区签到
     - 自动签到开始/完成推送可在 tajiduo.yaml 或锅巴中配置好友/群通知列表

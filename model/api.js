@@ -494,10 +494,50 @@ export default class TaJiDuoApi {
     })
   }
 
+  huantaSignState (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/huanta/sign/state', {
+      method: 'get',
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaSignRewards (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/huanta/sign/rewards', {
+      method: 'get',
+      params: buildQuery({
+        roleId: payload?.roleId
+      }),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaSignResignInfo (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/huanta/sign/resign-info', {
+      method: 'get',
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
   huantaSignGame (payload = {}) {
     const fwt = getFrameworkToken(payload)
 
     return this.request('/api/v1/games/huanta/sign/game', {
+      method: 'post',
+      data: omitFrameworkToken(payload),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  huantaSignResign (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/huanta/sign/resign', {
       method: 'post',
       data: omitFrameworkToken(payload),
       headers: buildFrameworkHeaders(fwt)
@@ -608,10 +648,41 @@ export default class TaJiDuoApi {
     })
   }
 
+  yihuanSignRewards (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/yihuan/sign/rewards', {
+      method: 'get',
+      params: buildQuery({
+        roleId: payload?.roleId
+      }),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanSignResignInfo (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/yihuan/sign/resign-info', {
+      method: 'get',
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
   yihuanSignGame (payload = {}) {
     const fwt = getFrameworkToken(payload)
 
     return this.request('/api/v1/games/yihuan/sign/game', {
+      method: 'post',
+      data: omitFrameworkToken(payload),
+      headers: buildFrameworkHeaders(fwt)
+    })
+  }
+
+  yihuanSignResign (payload = {}) {
+    const fwt = getFrameworkToken(payload)
+
+    return this.request('/api/v1/games/yihuan/sign/resign', {
       method: 'post',
       data: omitFrameworkToken(payload),
       headers: buildFrameworkHeaders(fwt)
