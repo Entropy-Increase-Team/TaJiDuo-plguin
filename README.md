@@ -14,6 +14,7 @@
 - 当前版本：`0.1.0`
 - 支持网页登录、多账号管理、幻塔/异环角色查询、签到、社区任务、商城与兑换码查询
 - 默认后端：`https://tajiduo.shallow.ink`
+- 测试API: `tjd-8FtI7adTkMHMjZaE`
 
 ## 使用须知
 
