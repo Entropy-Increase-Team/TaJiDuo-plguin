@@ -3,6 +3,7 @@ import chokidar from 'chokidar'
 import fs from 'node:fs'
 
 const _path = process.cwd().replace(/\\/g, '/')
+// help/message 作为可选覆盖文件，不随启动自动复制；需要自定义时由用户手动从 defSet 复制到 config。
 const CONFIG_SKIP_COPY = ['help', 'message']
 
 function deepMerge(base, override) {
@@ -40,12 +41,11 @@ class Setting {
     const files = fs.readdirSync(this.defPath).filter((file) => file.endsWith('.yaml'))
     for (const file of files) {
       const app = file.replace('.yaml', '')
-      if (!CONFIG_SKIP_COPY.includes(app) && !fs.existsSync(`${this.configPath}${file}`)) {
+      if (CONFIG_SKIP_COPY.includes(app)) continue
+      if (!fs.existsSync(`${this.configPath}${file}`)) {
         fs.copyFileSync(`${this.defPath}${file}`, `${this.configPath}${file}`)
       }
-      if (!CONFIG_SKIP_COPY.includes(app)) {
-        this.watch(`${this.configPath}${file}`, app, 'config')
-      }
+      this.watch(`${this.configPath}${file}`, app, 'config')
     }
   }
 

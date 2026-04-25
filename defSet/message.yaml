@@ -9,6 +9,7 @@ common:
   label_line: "{label}：{text}"
   no_data: "没有拿到可展示的数据"
   api_success: "成功"
+  sign_busy: "{task}正在执行中，请等待完成后再试。"
 login:
   captcha_usage: "用法：塔吉多登录 <手机号> 或 塔吉多验证码 <手机号>"
   captcha_sent: "验证码已发送到 {phone}\n设备：{deviceId}\n收到短信后发送：塔吉多登录 <验证码>"

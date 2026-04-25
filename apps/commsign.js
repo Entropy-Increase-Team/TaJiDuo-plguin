@@ -1,5 +1,6 @@
 import TaJiDuoUser from '../model/tajiduoUser.js'
 import setting from '../utils/setting.js'
+import { withSignLock } from '../utils/signLock.js'
 import {
   compactLine,
   GAME,
@@ -97,67 +98,71 @@ export class commsign extends plugin {
 
   async communitySign(gameCode) {
     const game = GAME[gameCode]
-    const users = await this.getUsers()
-    if (users.length === 0) return true
+    return withSignLock(this, `${game.name}社区签到`, async () => {
+      const users = await this.getUsers()
+      if (users.length === 0) return true
 
-    const cfg = this.getCommunityConfig()
-    const lines = []
-    for (const user of users) {
-      const res = await user.tjdReq.getData('community_sign_all', {
-        gameCode,
-        actionDelayMs: cfg.action_delay_ms,
-        stepDelayMs: cfg.step_delay_ms
-      })
-      if (!res || Number(res.code) !== 0) {
-        lines.push(`【${user.nickname || user.tjdUid || '账号'}】${getMessage('community.task_failed', {
+      const cfg = this.getCommunityConfig()
+      const lines = []
+      for (const user of users) {
+        const res = await user.tjdReq.getData('community_sign_all', {
+          gameCode,
+          actionDelayMs: cfg.action_delay_ms,
+          stepDelayMs: cfg.step_delay_ms
+        })
+        if (!res || Number(res.code) !== 0) {
+          lines.push(`【${user.nickname || user.tjdUid || '账号'}】${getMessage('community.task_failed', {
+            game: game.name,
+            message: summarizeApiError(res)
+          })}`)
+          continue
+        }
+
+        const data = res.data || {}
+        lines.push(`【${user.nickname || user.tjdUid || '账号'}】${getMessage('community.task_start', {
           game: game.name,
-          message: summarizeApiError(res)
+          taskId: data.taskId || '',
+          status: data.status || ''
         })}`)
-        continue
+
+        const final = await this.pollTask(user, gameCode, data.taskId)
+        if (final) lines.push(final)
       }
 
-      const data = res.data || {}
-      lines.push(`【${user.nickname || user.tjdUid || '账号'}】${getMessage('community.task_start', {
-        game: game.name,
-        taskId: data.taskId || '',
-        status: data.status || ''
-      })}`)
-
-      const final = await this.pollTask(user, gameCode, data.taskId)
-      if (final) lines.push(final)
-    }
-
-    await this.reply(lines.join('\n'))
-    return true
+      await this.reply(lines.join('\n'))
+      return true
+    })
   }
 
   async communitySignAll() {
-    const users = await this.getUsers()
-    if (users.length === 0) return true
+    return withSignLock(this, '塔吉多社区签到', async () => {
+      const users = await this.getUsers()
+      if (users.length === 0) return true
 
-    const cfg = this.getCommunityConfig()
-    const lines = []
-    for (const user of users) {
-      const res = await user.tjdReq.getData('all_community_sign', {
-        gameCodes: ['huanta', 'yihuan'],
-        actionDelayMs: cfg.action_delay_ms,
-        stepDelayMs: cfg.step_delay_ms,
-        betweenCommunitiesMs: cfg.between_communities_ms
-      })
-      if (!res || Number(res.code) !== 0) {
-        lines.push(`【${user.nickname || user.tjdUid || '账号'}】塔吉多社区签到失败：${summarizeApiError(res)}`)
-        continue
+      const cfg = this.getCommunityConfig()
+      const lines = []
+      for (const user of users) {
+        const res = await user.tjdReq.getData('all_community_sign', {
+          gameCodes: ['huanta', 'yihuan'],
+          actionDelayMs: cfg.action_delay_ms,
+          stepDelayMs: cfg.step_delay_ms,
+          betweenCommunitiesMs: cfg.between_communities_ms
+        })
+        if (!res || Number(res.code) !== 0) {
+          lines.push(`【${user.nickname || user.tjdUid || '账号'}】塔吉多社区签到失败：${summarizeApiError(res)}`)
+          continue
+        }
+
+        const data = res.data || {}
+        lines.push(`【${user.nickname || user.tjdUid || '账号'}】已提交塔吉多社区签到：${data.taskId || ''}\n状态：${data.status || ''}`)
+
+        const final = await this.pollAllTask(user, data.taskId)
+        if (final) lines.push(final)
       }
 
-      const data = res.data || {}
-      lines.push(`【${user.nickname || user.tjdUid || '账号'}】已提交塔吉多社区签到：${data.taskId || ''}\n状态：${data.status || ''}`)
-
-      const final = await this.pollAllTask(user, data.taskId)
-      if (final) lines.push(final)
-    }
-
-    await this.reply(lines.join('\n'))
-    return true
+      await this.reply(lines.join('\n'))
+      return true
+    })
   }
 
   async pollTask(user, gameCode, taskId) {

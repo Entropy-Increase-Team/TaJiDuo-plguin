@@ -19,3 +19,5 @@ community_task:
   between_communities_ms: 15000
   poll_times: 8
   poll_interval_ms: 5000
+  # 双社区任务轮询次数；留空则默认使用 poll_times 的 3 倍
+  batch_poll_times: null

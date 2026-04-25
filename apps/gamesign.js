@@ -1,6 +1,7 @@
 import TaJiDuoUser from '../model/tajiduoUser.js'
 import setting from '../utils/setting.js'
 import { normalizeCronExpression } from '../utils/cron.js'
+import { withSignLock } from '../utils/signLock.js'
 import {
   GAME,
   getMessage,
@@ -124,39 +125,43 @@ export class gamesign extends plugin {
 
   async sign(gameCode) {
     const game = GAME[gameCode]
-    const users = await this.getUsers()
-    if (users.length === 0) return true
+    return withSignLock(this, `${game.name}签到`, async () => {
+      const users = await this.getUsers()
+      if (users.length === 0) return true
 
-    await this.reply(getMessage('game.sign_start', { game: game.name }))
-    const lines = [getMessage('game.sign_done', { game: game.name })]
-    for (const user of users) {
-      const title = user.nickname || user.tjdUid || '塔吉多账号'
-      const result = await this.signOne(user, gameCode)
-      lines.push(`【${title}】`)
-      lines.push(...result.lines)
-    }
-    await this.reply(lines.join('\n'))
-    return true
+      await this.reply(getMessage('game.sign_start', { game: game.name }))
+      const lines = [getMessage('game.sign_done', { game: game.name })]
+      for (const user of users) {
+        const title = user.nickname || user.tjdUid || '塔吉多账号'
+        const result = await this.signOne(user, gameCode)
+        lines.push(`【${title}】`)
+        lines.push(...result.lines)
+      }
+      await this.reply(lines.join('\n'))
+      return true
+    })
   }
 
   async tajiduoSign() {
-    const users = await this.getUsers()
-    if (users.length === 0) return true
+    return withSignLock(this, '塔吉多签到', async () => {
+      const users = await this.getUsers()
+      if (users.length === 0) return true
 
-    await this.reply('开始执行塔吉多签到...')
-    const lines = ['塔吉多签到完成']
-    for (const user of users) {
-      const title = user.nickname || user.tjdUid || '塔吉多账号'
-      lines.push(`【${title}】`)
-      for (const gameCode of ['huanta', 'yihuan']) {
-        const game = GAME[gameCode]
-        const result = await this.signOne(user, gameCode)
-        lines.push(`【${game.name}】`)
-        lines.push(...result.lines)
+      await this.reply('开始执行塔吉多签到...')
+      const lines = ['塔吉多签到完成']
+      for (const user of users) {
+        const title = user.nickname || user.tjdUid || '塔吉多账号'
+        lines.push(`【${title}】`)
+        for (const gameCode of ['huanta', 'yihuan']) {
+          const game = GAME[gameCode]
+          const result = await this.signOne(user, gameCode)
+          lines.push(`【${game.name}】`)
+          lines.push(...result.lines)
+        }
       }
-    }
-    await this.reply(lines.join('\n'))
-    return true
+      await this.reply(lines.join('\n'))
+      return true
+    })
   }
 
   async huantaSign() {
@@ -250,15 +255,17 @@ export class gamesign extends plugin {
   async signTask(gameCode) {
     if (!this.e?.isMaster) return false
     const game = GAME[gameCode]
-    const stats = await this.runSignTask(gameCode, true)
-    const lines = [
-      `${game.name}全部签到完成`,
-      `账号：${stats.total}，成功：${stats.success}，失败：${stats.fail}`,
-      ...stats.lines.slice(0, 30)
-    ]
-    if (stats.lines.length > 30) lines.push(`还有 ${stats.lines.length - 30} 条结果未展开`)
-    await this.reply(lines.join('\n'))
-    return true
+    return withSignLock(this, `${game.name}全部签到`, async () => {
+      const stats = await this.runSignTask(gameCode, true)
+      const lines = [
+        `${game.name}全部签到完成`,
+        `账号：${stats.total}，成功：${stats.success}，失败：${stats.fail}`,
+        ...stats.lines.slice(0, 30)
+      ]
+      if (stats.lines.length > 30) lines.push(`还有 ${stats.lines.length - 30} 条结果未展开`)
+      await this.reply(lines.join('\n'))
+      return true
+    })
   }
 
   async huantaSignTask() {

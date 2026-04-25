@@ -38,6 +38,11 @@ export default function getMessageSchemas() {
       component: 'Input'
     },
     {
+      field: 'message.common.sign_busy',
+      label: '签到占用提示',
+      component: 'Input'
+    },
+    {
       component: 'Divider',
       label: '登录文案'
     },

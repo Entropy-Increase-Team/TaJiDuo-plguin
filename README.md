@@ -22,6 +22,7 @@
 - 支持塔塔币、商城商品、兑换码、收入与消耗记录查询
 
 本插件依赖 TaJiDuo 后端接口。使用前请先在 `config/common.yaml` 中填写可用的 `api_key`。
+官方反馈群聊: 1090940860
 
 ## 安装
 
@@ -99,7 +100,9 @@ tjd删除登录 2
 
 ## 配置
 
-配置文件位于 `plugins/TaJiDuo-plugin/config/`。首次启动会从 `defSet/` 复制默认配置。
+配置文件位于 `plugins/TaJiDuo-plugin/config/`。默认配置位于 `plugins/TaJiDuo-plugin/defSet/`，插件更新默认项时只改 `defSet/`。
+
+首次启动会从 `defSet/` 自动复制常规配置到 `config/`，但 `help.yaml` 与 `message.yaml` 不会自动复制。需要自定义帮助或回复文案时，手动把 `defSet/help.yaml`、`defSet/message.yaml` 复制到 `config/` 后再修改。
 
 ### common.yaml
 
@@ -119,6 +122,7 @@ community_task:
   between_communities_ms: 15000
   poll_times: 8
   poll_interval_ms: 5000
+  batch_poll_times: null
 ```
 
 说明：
@@ -138,7 +142,7 @@ community_task:
 ### sign.yaml
 
 ```yaml
-auto_sign: false
+auto_sign: true
 auto_sign_cron: "10 1 * * *"
 games:
   - huanta
