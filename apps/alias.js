@@ -36,7 +36,8 @@ export class alias extends plugin {
       rule: [
         {
           reg: `^${PREFIX.yihuan}(?:添加|删除)(?:角色)?.+别名.+$`,
-          fnc: 'yihuanAlias'
+          fnc: 'yihuanAlias',
+          permission: 'master'
         },
         {
           reg: `^${PREFIX.yihuan}.+别名(?:列表)?$`,

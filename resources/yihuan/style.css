@@ -263,7 +263,7 @@ body.refresh-body {
 
 .stat-value {
   height: 42px;
-  color: rgba(0, 0, 0, 0.62);
+  color: white;
   font-size: 42px;
   line-height: 42px;
   font-weight: 900;

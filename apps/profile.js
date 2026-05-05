@@ -797,7 +797,7 @@ export class profile extends plugin {
           fnc: 'yihuanHome'
         },
         {
-          reg: `^${PREFIX.yihuan}(刷新面板|刷新面版|更新面板|更新面版|强制刷新|面板刷新|面板更新)$`,
+          reg: `^${PREFIX.yihuan}(?:[刷更]新面[板版]|面板[刷更]新|强制刷新)$`,
           fnc: 'yihuanCharacters'
         },
         {
