@@ -11,9 +11,22 @@ if (!global.core) {
   } catch (err) {}
 }
 
-const files = fs
-  .readdirSync('./plugins/TaJiDuo-plugin/apps')
-  .filter((file) => file.endsWith('.js'))
+const appsPath = './plugins/TaJiDuo-plugin/apps'
+
+function getAppFiles(dir, prefix = '') {
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name
+      const parts = relative.split('/')
+      if (parts.includes('common') || parts.includes('shared')) return []
+      const fullPath = `${dir}/${entry.name}`
+      if (entry.isDirectory()) return getAppFiles(fullPath, relative)
+      return entry.isFile() && entry.name.endsWith('.js') ? [relative] : []
+    })
+    .sort()
+}
+
+const files = getAppFiles(appsPath)
 
 let ret = []
 
@@ -35,7 +48,7 @@ ret = await Promise.allSettled(ret)
 
 let apps = {}
 for (let i in files) {
-  const name = files[i].replace('.js', '')
+  const name = files[i].replace(/\.js$/, '').replace(/\//g, '_')
 
   if (ret[i].status !== 'fulfilled') {
     logger.error(`载入插件错误：${logger.red(name)}`)

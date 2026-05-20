@@ -23,7 +23,7 @@
 
 ### 0.1.4
 
-- 异环抽卡分析改为优先使用 NTEUID 风格图卡渲染，渲染失败时保留文本转发兜底。
+- 移除异环数据图卡渲染模板，相关查询统一使用文本或合并转发输出；帮助面板渲染保留。
 
 ### 0.1.3
 
@@ -253,13 +253,17 @@ npm test
 
 ```text
 plugins/TaJiDuo-plugin
-├── apps/          # 命令入口
+├── apps/          # 命令入口，按 common / tajiduo / huanta / yihuan 分域组织
+│   ├── common/    # 跨游戏复用的命令基类与流程
+│   ├── tajiduo/   # 平台账号、商城、更新、聚合签到等塔吉多公共功能
+│   ├── huanta/    # 幻塔档案、签到、社区、签到日历
+│   └── yihuan/    # 异环主页、角色、抽卡、面板、成就、探索、房产、载具等
 ├── components/    # 网页登录服务
 ├── config/        # 用户配置
 ├── defSet/        # 默认配置
 ├── guoba/         # Guoba 配置面板 schema
 ├── model/         # API 与账号模型
-├── resources/     # 帮助图与网页登录页面
+├── resources/     # 帮助面板与网页登录页面
 └── utils/         # 通用工具
 ```
 
@@ -268,7 +272,6 @@ plugins/TaJiDuo-plugin
 - TaJiDuo API 后端与文档维护者
 - Yunzai 系列机器人框架
 - 幻塔、异环相关官方数据来源
-- 渲染模板参考早柚核心 [NTEUID](https://github.com/tyql688/NTEUID)
 
 ## 开源协议
 
